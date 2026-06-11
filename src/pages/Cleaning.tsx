@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react'
-import { Card, Steps, Button, Form, Input, Select, Radio, message, Modal, Table, Tag } from 'antd'
+import { Card, Steps, Button, Form, Input, Select, Radio, message, Modal, Table, Tag, Space } from 'antd'
 import { 
   PlayCircleOutlined, 
   PauseCircleOutlined, 
@@ -68,10 +68,14 @@ function Cleaning({ user }: CleaningProps) {
 
   useEffect(() => {
     if (selectedBatch) {
-      setCurrentStep(selectedBatch.currentStep)
-      setStepDetails(selectedBatch.stepDetails || {})
+      const updatedBatch = batches.find(b => b.id === selectedBatch.id)
+      if (updatedBatch) {
+        setSelectedBatch(updatedBatch)
+        setCurrentStep(updatedBatch.currentStep)
+        setStepDetails(updatedBatch.stepDetails || {})
+      }
     }
-  }, [selectedBatch])
+  }, [selectedBatch?.id, batches])
 
   const formatTime = (seconds: number) => {
     const mins = Math.floor(seconds / 60)
@@ -121,7 +125,9 @@ function Cleaning({ user }: CleaningProps) {
 
     if (!selectedBatch) return
 
-    let newStepDetails: StepDetails = { ...stepDetails }
+    const currentBatch = batches.find(b => b.id === selectedBatch.id) || selectedBatch
+    const existingStepDetails = currentBatch.stepDetails || {}
+    let newStepDetails: StepDetails = { ...existingStepDetails }
 
     if (currentStep === 0) {
       newStepDetails.preprocess = { 
@@ -307,15 +313,35 @@ function Cleaning({ user }: CleaningProps) {
       title: '操作', 
       key: 'action',
       render: (_: unknown, record: CleaningBatch) => (
-        <Button 
-          icon={<FileTextOutlined />} 
-          onClick={() => {
-            setSelectedBatch(record)
-            setShowDetailModal(true)
-          }}
-        >
-          详情
-        </Button>
+        <Space>
+          <Button 
+            type={record.status === 'processing' ? 'primary' : 'default'}
+            icon={<CheckCircleOutlined />}
+            onClick={() => {
+              const batchFromStore = batches.find(b => b.id === record.id)
+              if (batchFromStore) {
+                setSelectedBatch(batchFromStore)
+                setCurrentStep(batchFromStore.currentStep)
+                setStepDetails(batchFromStore.stepDetails || {})
+                setShowDetailModal(false)
+              }
+            }}
+          >
+            操作
+          </Button>
+          <Button 
+            icon={<FileTextOutlined />} 
+            onClick={() => {
+              const batchFromStore = batches.find(b => b.id === record.id)
+              if (batchFromStore) {
+                setSelectedBatch(batchFromStore)
+                setShowDetailModal(true)
+              }
+            }}
+          >
+            详情
+          </Button>
+        </Space>
       )
     },
   ]

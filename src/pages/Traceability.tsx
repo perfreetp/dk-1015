@@ -127,193 +127,192 @@ function Traceability({ user }: TraceabilityProps) {
     
     const patient = patients.find(p => p.id === selectedBatch.patientId)
     const endoscope = endoscopes.find(e => e.id === selectedBatch.endoscopeId)
-    
     const stepDetails = selectedBatch.stepDetails || {}
+    
+    const currentUserName = user.name
+    const currentPrintTime = new Date().toLocaleString('zh-CN')
+    const preprocessDone = selectedBatch.steps.preprocess
+    const leakTestDone = selectedBatch.steps.leakTest
+    const manualBrushDone = selectedBatch.steps.manualBrush
+    const machineWashDone = selectedBatch.steps.machineWash
+    const disinfectionDone = selectedBatch.steps.disinfection
+    const dryStorageDone = selectedBatch.steps.dryStorage
+    const preprocessDetails = stepDetails.preprocess
+    const leakTestDetails = stepDetails.leakTest
+    const manualBrushDetails = stepDetails.manualBrush
+    const machineWashDetails = stepDetails.machineWash
+    const disinfectionDetails = stepDetails.disinfection
+    const dryStorageDetails = stepDetails.dryStorage
 
-    const printContent = `
-      <!DOCTYPE html>
-      <html>
-      <head>
-        <meta charset="utf-8">
-        <title>消化内镜洗消追溯单</title>
-        <style>
-          body { font-family: 'SimSun', serif; padding: 20px; font-size: 14px; }
-          .header { text-align: center; margin-bottom: 30px; }
-          .header h1 { font-size: 24px; margin-bottom: 10px; }
-          .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; }
-          .info-item { padding: 10px; border-bottom: 1px solid #eee; }
-          .info-label { color: #666; font-size: 13px; }
-          .info-value { font-weight: bold; font-size: 15px; }
-          .steps-section { margin-top: 30px; }
-          .steps-section h3 { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; font-size: 16px; }
-          .step-item { padding: 12px 15px; border-bottom: 1px solid #eee; }
-          .step-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
-          .step-name { font-weight: bold; }
-          .step-status { font-weight: bold; }
-          .step-details { padding-left: 15px; font-size: 13px; color: #555; line-height: 1.6; }
-          .footer { margin-top: 40px; text-align: right; border-top: 1px solid #eee; padding-top: 20px; }
-          .signature { margin-top: 30px; display: flex; justify-content: space-between; padding: 0 20px; }
-          .signature-box { border-bottom: 1px solid #000; width: 200px; text-align: center; padding-bottom: 5px; margin-bottom: 10px; }
-          .operator-info { font-size: 13px; color: #666; }
-          .print-time { margin-top: 20px; font-size: 12px; color: #888; }
-        </style>
-      </head>
-      <body>
-        <div class="header">
-          <h1>消化内镜洗消追溯单</h1>
-          <p>批次号: ${selectedBatch.batchNumber}</p>
-        </div>
-        
-        <div class="info-grid">
-          <div class="info-item">
-            <div class="info-label">内镜编号</div>
-            <div class="info-value">${selectedBatch.endoscopeSerial}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">内镜型号</div>
-            <div class="info-value">${endoscope?.model || '-'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">患者姓名</div>
-            <div class="info-value">${selectedBatch.patientName || '未关联'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">患者ID</div>
-            <div class="info-value">${patient?.patientId || '-'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">感染风险</div>
-            <div class="info-value">${patient ? (patient.riskLevel === 'normal' ? '普通' : patient.riskLevel === 'high' ? '高风险' : '危重') : '-'}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">洗消状态</div>
-            <div class="info-value">${batchStatusConfig[selectedBatch.status].text}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">开始时间</div>
-            <div class="info-value">${selectedBatch.startTime}</div>
-          </div>
-          <div class="info-item">
-            <div class="info-label">结束时间</div>
-            <div class="info-value">${selectedBatch.endTime || '进行中'}</div>
-          </div>
-        </div>
-        
-        <div class="steps-section">
-          <h3>洗消流程记录</h3>
-          
-          <div class="step-item">
-            <div class="step-header">
-              <span class="step-name">1. 预处理</span>
-              <span class="step-status" style="color: ${selectedBatch.steps.preprocess ? '#22c55e' : '#9ca3af'}">
-                ${selectedBatch.steps.preprocess ? '✓ 已完成' : '○ 未完成'}
-              </span>
-            </div>
-            ${stepDetails.preprocess ? `
-            <div class="step-details">
-              开始时间: ${stepDetails.preprocess.startTime || '-'}<br>
-              预处理时长: ${stepDetails.preprocess.duration}秒
-            </div>
-            ` : ''}
-          </div>
-          
-          <div class="step-item">
-            <div class="step-header">
-              <span class="step-name">2. 测漏登记</span>
-              <span class="step-status" style="color: ${selectedBatch.steps.leakTest ? '#22c55e' : '#9ca3af'}">
-                ${selectedBatch.steps.leakTest ? '✓ 已完成' : '○ 未完成'}
-              </span>
-            </div>
-            ${stepDetails.leakTest ? `
-            <div class="step-details">
-              测漏结果: ${stepDetails.leakTest.result ? '通过' : '未通过'}<br>
-              操作者: ${stepDetails.leakTest.operator || '-'}
-              ${stepDetails.leakTest.description ? `<br>问题描述: ${stepDetails.leakTest.description}` : ''}
-            </div>
-            ` : ''}
-          </div>
-          
-          <div class="step-item">
-            <div class="step-header">
-              <span class="step-name">3. 手工刷洗</span>
-              <span class="step-status" style="color: ${selectedBatch.steps.manualBrush ? '#22c55e' : '#9ca3af'}">
-                ${selectedBatch.steps.manualBrush ? '✓ 已完成' : '○ 未完成'}
-              </span>
-            </div>
-            ${stepDetails.manualBrush ? `
-            <div class="step-details">
-              操作人员签名: ${stepDetails.manualBrush.signature || '-'}
-            </div>
-            ` : ''}
-          </div>
-          
-          <div class="step-item">
-            <div class="step-header">
-              <span class="step-name">4. 机洗程序</span>
-              <span class="step-status" style="color: ${selectedBatch.steps.machineWash ? '#22c55e' : '#9ca3af'}">
-                ${selectedBatch.steps.machineWash ? '✓ 已完成' : '○ 未完成'}
-              </span>
-            </div>
-            ${stepDetails.machineWash ? `
-            <div class="step-details">
-              程序选择: ${programLabelMap[stepDetails.machineWash.program] || stepDetails.machineWash.program}<br>
-              运行时长: ${stepDetails.machineWash.runTime}秒<br>
-              开始时间: ${stepDetails.machineWash.startTime || '-'}
-            </div>
-            ` : ''}
-          </div>
-          
-          <div class="step-item">
-            <div class="step-header">
-              <span class="step-name">5. 消毒记录</span>
-              <span class="step-status" style="color: ${selectedBatch.steps.disinfection ? '#22c55e' : '#9ca3af'}">
-                ${selectedBatch.steps.disinfection ? '✓ 已完成' : '○ 未完成'}
-              </span>
-            </div>
-            ${stepDetails.disinfection ? `
-            <div class="step-details">
-              消毒液浓度: ${stepDetails.disinfection.concentration}%<br>
-              消毒时间: ${stepDetails.disinfection.time}分钟<br>
-              消毒温度: ${stepDetails.disinfection.temperature}℃<br>
-              操作者: ${stepDetails.disinfection.operator || '-'}
-            </div>
-            ` : ''}
-          </div>
-          
-          <div class="step-item">
-            <div class="step-header">
-              <span class="step-name">6. 干燥存放</span>
-              <span class="step-status" style="color: ${selectedBatch.steps.dryStorage ? '#22c55e' : '#9ca3af'}">
-                ${selectedBatch.steps.dryStorage ? '✓ 已完成' : '○ 未完成'}
-              </span>
-            </div>
-            ${stepDetails.dryStorage ? `
-            <div class="step-details">
-              干燥时间: ${stepDetails.dryStorage.dryTime}分钟<br>
-              存放位置: ${stepDetails.dryStorage.location || '-'}<br>
-              操作者: ${stepDetails.dryStorage.operator || '-'}
-            </div>
-            ` : ''}
-          </div>
-        </div>
-        
-        <div class="footer">
-          <div class="signature">
-            <div>
-              <div class="signature-box">操作人员签名</div>
-              <div class="operator-info">{user.name}</div>
-            </div>
-            <div>
-              <div class="signature-box">质控人员签名</div>
-              <div class="operator-info">________________</div>
-            </div>
-          </div>
-          <div class="print-time">打印时间: ${new Date().toLocaleString('zh-CN')}</div>
-          <div class="print-time">打印人员: ${user.name}</div>
-        </div>
-      </body>
-      </html>
-    `
+    const printContent = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <title>消化内镜洗消追溯单</title>
+  <style>
+    body { font-family: 'SimSun', serif; padding: 20px; font-size: 14px; }
+    .header { text-align: center; margin-bottom: 30px; }
+    .header h1 { font-size: 24px; margin-bottom: 10px; }
+    .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; }
+    .info-item { padding: 10px; border-bottom: 1px solid #eee; }
+    .info-label { color: #666; font-size: 13px; }
+    .info-value { font-weight: bold; font-size: 15px; }
+    .steps-section { margin-top: 30px; }
+    .steps-section h3 { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; font-size: 16px; }
+    .step-item { padding: 12px 15px; border-bottom: 1px solid #eee; }
+    .step-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+    .step-name { font-weight: bold; }
+    .step-status { font-weight: bold; }
+    .step-details { padding-left: 15px; font-size: 13px; color: #555; line-height: 1.6; }
+    .footer { margin-top: 40px; text-align: right; border-top: 1px solid #eee; padding-top: 20px; }
+    .signature { margin-top: 30px; display: flex; justify-content: space-between; padding: 0 20px; }
+    .signature-box { border-bottom: 1px solid #000; width: 200px; text-align: center; padding-bottom: 5px; margin-bottom: 10px; }
+    .operator-info { font-size: 13px; color: #666; }
+    .print-time { margin-top: 20px; font-size: 12px; color: #888; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>消化内镜洗消追溯单</h1>
+    <p>批次号: ${selectedBatch.batchNumber}</p>
+  </div>
+  
+  <div class="info-grid">
+    <div class="info-item">
+      <div class="info-label">内镜编号</div>
+      <div class="info-value">${selectedBatch.endoscopeSerial}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">内镜型号</div>
+      <div class="info-value">${endoscope?.model || '-'}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">患者姓名</div>
+      <div class="info-value">${selectedBatch.patientName || '未关联'}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">患者ID</div>
+      <div class="info-value">${patient?.patientId || '-'}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">感染风险</div>
+      <div class="info-value">${patient ? (patient.riskLevel === 'normal' ? '普通' : patient.riskLevel === 'high' ? '高风险' : '危重') : '-'}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">洗消状态</div>
+      <div class="info-value">${batchStatusConfig[selectedBatch.status].text}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">开始时间</div>
+      <div class="info-value">${selectedBatch.startTime}</div>
+    </div>
+    <div class="info-item">
+      <div class="info-label">结束时间</div>
+      <div class="info-value">${selectedBatch.endTime || '进行中'}</div>
+    </div>
+  </div>
+  
+  <div class="steps-section">
+    <h3>洗消流程记录</h3>
+    
+    <div class="step-item">
+      <div class="step-header">
+        <span class="step-name">1. 预处理</span>
+        <span class="step-status" style="color: ${preprocessDone ? '#22c55e' : '#9ca3af'}">
+          ${preprocessDone ? '✓ 已完成' : '○ 未完成'}
+        </span>
+      </div>
+      ${preprocessDetails ? `<div class="step-details">
+        开始时间: ${preprocessDetails.startTime || '-'}<br>
+        预处理时长: ${preprocessDetails.duration}秒
+      </div>` : ''}
+    </div>
+    
+    <div class="step-item">
+      <div class="step-header">
+        <span class="step-name">2. 测漏登记</span>
+        <span class="step-status" style="color: ${leakTestDone ? '#22c55e' : '#9ca3af'}">
+          ${leakTestDone ? '✓ 已完成' : '○ 未完成'}
+        </span>
+      </div>
+      ${leakTestDetails ? `<div class="step-details">
+        测漏结果: ${leakTestDetails.result ? '通过' : '未通过'}<br>
+        操作者: ${leakTestDetails.operator || '-'}${leakTestDetails.description ? `<br>问题描述: ${leakTestDetails.description}` : ''}
+      </div>` : ''}
+    </div>
+    
+    <div class="step-item">
+      <div class="step-header">
+        <span class="step-name">3. 手工刷洗</span>
+        <span class="step-status" style="color: ${manualBrushDone ? '#22c55e' : '#9ca3af'}">
+          ${manualBrushDone ? '✓ 已完成' : '○ 未完成'}
+        </span>
+      </div>
+      ${manualBrushDetails ? `<div class="step-details">
+        操作人员签名: ${manualBrushDetails.signature || '-'}
+      </div>` : ''}
+    </div>
+    
+    <div class="step-item">
+      <div class="step-header">
+        <span class="step-name">4. 机洗程序</span>
+        <span class="step-status" style="color: ${machineWashDone ? '#22c55e' : '#9ca3af'}">
+          ${machineWashDone ? '✓ 已完成' : '○ 未完成'}
+        </span>
+      </div>
+      ${machineWashDetails ? `<div class="step-details">
+        程序选择: ${programLabelMap[machineWashDetails.program] || machineWashDetails.program}<br>
+        运行时长: ${machineWashDetails.runTime}秒<br>
+        开始时间: ${machineWashDetails.startTime || '-'}
+      </div>` : ''}
+    </div>
+    
+    <div class="step-item">
+      <div class="step-header">
+        <span class="step-name">5. 消毒记录</span>
+        <span class="step-status" style="color: ${disinfectionDone ? '#22c55e' : '#9ca3af'}">
+          ${disinfectionDone ? '✓ 已完成' : '○ 未完成'}
+        </span>
+      </div>
+      ${disinfectionDetails ? `<div class="step-details">
+        消毒液浓度: ${disinfectionDetails.concentration}%<br>
+        消毒时间: ${disinfectionDetails.time}分钟<br>
+        消毒温度: ${disinfectionDetails.temperature}℃<br>
+        操作者: ${disinfectionDetails.operator || '-'}
+      </div>` : ''}
+    </div>
+    
+    <div class="step-item">
+      <div class="step-header">
+        <span class="step-name">6. 干燥存放</span>
+        <span class="step-status" style="color: ${dryStorageDone ? '#22c55e' : '#9ca3af'}">
+          ${dryStorageDone ? '✓ 已完成' : '○ 未完成'}
+        </span>
+      </div>
+      ${dryStorageDetails ? `<div class="step-details">
+        干燥时间: ${dryStorageDetails.dryTime}分钟<br>
+        存放位置: ${dryStorageDetails.location || '-'}<br>
+        操作者: ${dryStorageDetails.operator || '-'}
+      </div>` : ''}
+    </div>
+  </div>
+  
+  <div class="footer">
+    <div class="signature">
+      <div>
+        <div class="signature-box">操作人员签名</div>
+        <div class="operator-info">${currentUserName}</div>
+      </div>
+      <div>
+        <div class="signature-box">质控人员签名</div>
+        <div class="operator-info">________________</div>
+      </div>
+    </div>
+    <div class="print-time">打印时间: ${currentPrintTime}</div>
+    <div class="print-time">打印人员: ${currentUserName}</div>
+  </div>
+</body>
+</html>`
 
     const printWindow = window.open('', '_blank')
     if (printWindow) {

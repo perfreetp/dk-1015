@@ -1,5 +1,6 @@
 import { useState, useMemo } from 'react'
 import { Card, Row, Col, Statistic, Button, Select, DatePicker, message } from 'antd'
+import dayjs from 'dayjs'
 import { 
   BarChartOutlined, 
   DownloadOutlined, 
@@ -49,12 +50,7 @@ const generateMonthlyData = (_month: string) => {
 }
 
 function Reports() {
-  const [selectedMonth, setSelectedMonth] = useState(() => {
-    const today = new Date()
-    const year = today.getFullYear()
-    const month = String(today.getMonth() + 1).padStart(2, '0')
-    return `${year}-${month}`
-  })
+  const [selectedMonth, setSelectedMonth] = useState(dayjs().format('YYYY-MM'))
 
   const currentMonthData = useMemo(() => {
     return generateMonthlyData(selectedMonth)
@@ -128,24 +124,20 @@ function Reports() {
     }
   }
 
-  const handleDatePickerChange = (date: Date | null) => {
+  const handleDatePickerChange = (date: dayjs.Dayjs | null) => {
     if (date) {
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
-      setSelectedMonth(`${year}-${month}`)
+      setSelectedMonth(date.format('YYYY-MM'))
     }
   }
 
   const getMonthOptions = () => {
     const options = []
-    const today = new Date()
+    const today = dayjs()
     for (let i = 0; i < 12; i++) {
-      const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
-      const year = date.getFullYear()
-      const month = String(date.getMonth() + 1).padStart(2, '0')
+      const date = today.subtract(i, 'month')
       options.push({
-        value: `${year}-${month}`,
-        label: `${year}年${month}月`,
+        value: date.format('YYYY-MM'),
+        label: date.format('YYYY年MM月'),
       })
     }
     return options
@@ -167,9 +159,10 @@ function Reports() {
           />
           <DatePicker 
             picker="month" 
-            value={selectedMonth ? new Date(selectedMonth + '-01') : undefined}
+            value={dayjs(selectedMonth, 'YYYY-MM')}
             onChange={handleDatePickerChange}
             style={{ width: 200 }}
+            allowClear={false}
           />
         </div>
         <Button type="primary" icon={<DownloadOutlined />} onClick={handleExport}>
