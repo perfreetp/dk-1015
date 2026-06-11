@@ -7,7 +7,8 @@ import {
   EyeOutlined,
   LinkOutlined
 } from '@ant-design/icons'
-import { mockPatients, mockEndoscopes, type Patient } from '../data/mockData'
+import { useStore } from '../store/useStore'
+import type { Patient } from '../data/mockData'
 
 const riskLevelConfig = {
   normal: { color: 'green', text: '普通' },
@@ -16,10 +17,13 @@ const riskLevelConfig = {
 }
 
 function Patient() {
-  const [patients, setPatients] = useState<Patient[]>(mockPatients)
+  const { patients, endoscopes, batches, addPatient, updatePatient, addBatch, updateEndoscopeStatus } = useStore()
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isScanModalVisible, setIsScanModalVisible] = useState(false)
+  const [isBindModalVisible, setIsBindModalVisible] = useState(false)
   const [editingItem, setEditingItem] = useState<Patient | null>(null)
+  const [bindingPatient, setBindingPatient] = useState<Patient | null>(null)
+  const [selectedEndoscopeId, setSelectedEndoscopeId] = useState<number | null>(null)
   const [form] = Form.useForm()
   const [scanValue, setScanValue] = useState('')
 
@@ -42,9 +46,9 @@ function Patient() {
       key: 'action',
       render: (_: unknown, record: Patient) => (
         <Space>
-          <Button icon={<EyeOutlined />} />
+          <Button icon={<EyeOutlined />} onClick={() => showDetail(record)} />
           <Button icon={<EditOutlined />} onClick={() => editItem(record)} />
-          <Button icon={<LinkOutlined />} onClick={() => bindEndoscope(record)} />
+          <Button icon={<LinkOutlined />} onClick={() => openBindModal(record)} />
         </Space>
       )
     },
@@ -62,24 +66,57 @@ function Patient() {
     setIsModalVisible(true)
   }
 
+  const showDetail = (patient: Patient) => {
+    const patientBatches = batches.filter(b => b.patientId === patient.id)
+    Modal.info({
+      title: '患者详情',
+      content: (
+        <div className="space-y-4">
+          <div className="grid grid-cols-2 gap-4">
+            <div><strong>患者ID:</strong> {patient.patientId}</div>
+            <div><strong>姓名:</strong> {patient.name}</div>
+            <div><strong>性别:</strong> {patient.gender}</div>
+            <div><strong>年龄:</strong> {patient.age}</div>
+            <div><strong>感染风险:</strong> <Tag color={riskLevelConfig[patient.riskLevel].color}>{riskLevelConfig[patient.riskLevel].text}</Tag></div>
+            <div><strong>创建时间:</strong> {patient.createdAt}</div>
+          </div>
+          {patientBatches.length > 0 && (
+            <div>
+              <h4 className="font-semibold mt-4 mb-2">关联的洗消批次:</h4>
+              <ul className="space-y-1">
+                {patientBatches.map(batch => (
+                  <li key={batch.id}>批次号: {batch.batchNumber} - 内镜: {batch.endoscopeSerial} - 状态: {batch.status}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+      ),
+    })
+  }
+
   const showScanModal = () => {
     setScanValue('')
     setIsScanModalVisible(true)
   }
 
+  const openBindModal = (patient: Patient) => {
+    setBindingPatient(patient)
+    setSelectedEndoscopeId(null)
+    setIsBindModalVisible(true)
+  }
+
   const handleOk = () => {
     form.validateFields().then(values => {
       if (editingItem) {
-        setPatients(patients.map(p => p.id === editingItem.id ? { ...p, ...values } : p))
+        updatePatient(editingItem.id, values)
         message.success('更新成功')
       } else {
-        const newItem: Patient = {
+        addPatient({
           ...values,
-          id: Date.now(),
-          patientId: `P${Date.now()}`,
+          patientId: values.patientId || `P${Date.now()}`,
           createdAt: new Date().toLocaleString('zh-CN'),
-        } as Patient
-        setPatients([...patients, newItem])
+        })
         message.success('创建成功')
       }
       setIsModalVisible(false)
@@ -94,7 +131,7 @@ function Patient() {
     const existingPatient = patients.find(p => p.patientId === scanValue || p.name === scanValue)
     if (existingPatient) {
       message.success(`找到患者: ${existingPatient.name}`)
-      setEditingItem(existingPatient)
+      openBindModal(existingPatient)
       setIsScanModalVisible(false)
     } else {
       message.info('未找到患者，是否新建？')
@@ -104,29 +141,47 @@ function Patient() {
     }
   }
 
-  const bindEndoscope = (patient: Patient) => {
-    Modal.info({
-      title: '绑定内镜',
-      content: (
-        <div>
-          <p>患者: {patient.name} ({patient.patientId})</p>
-          <p className="mt-2">选择要绑定的内镜:</p>
-          <Select
-            style={{ width: '100%', marginTop: 10 }}
-            options={mockEndoscopes
-              .filter(e => e.status === 'in_use')
-              .map(e => ({ value: e.id, label: `${e.serialNumber} - ${e.model}` }))
-            }
-            placeholder="选择内镜"
-          />
-        </div>
-      ),
-      footer: (
-        <Button type="primary" onClick={() => message.success('绑定成功')}>
-          确认绑定
-        </Button>
-      )
+  const handleBindSubmit = () => {
+    if (!selectedEndoscopeId) {
+      message.error('请选择要绑定的内镜')
+      return
+    }
+    if (!bindingPatient) return
+
+    const endoscope = endoscopes.find(e => e.id === selectedEndoscopeId)
+    if (!endoscope) {
+      message.error('所选内镜不存在')
+      return
+    }
+
+    const now = new Date()
+    const batchNumber = `CB${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}${String(batches.length + 1).padStart(3, '0')}`
+
+    addBatch({
+      batchNumber,
+      endoscopeId: endoscope.id,
+      endoscopeSerial: endoscope.serialNumber,
+      patientId: bindingPatient.id,
+      patientName: bindingPatient.name,
+      status: 'pending',
+      currentStep: 0,
+      steps: {
+        preprocess: false,
+        leakTest: false,
+        manualBrush: false,
+        machineWash: false,
+        disinfection: false,
+        dryStorage: false,
+      },
+      startTime: now.toLocaleString('zh-CN'),
     })
+
+    updateEndoscopeStatus(endoscope.id, 'in_use')
+
+    message.success(`绑定成功！已创建洗消批次: ${batchNumber}`)
+    setIsBindModalVisible(false)
+    setBindingPatient(null)
+    setSelectedEndoscopeId(null)
   }
 
   return (
@@ -202,6 +257,47 @@ function Patient() {
             className="text-center text-xl"
           />
         </div>
+      </Modal>
+
+      <Modal
+        title="绑定内镜"
+        visible={isBindModalVisible}
+        onOk={handleBindSubmit}
+        onCancel={() => {
+          setIsBindModalVisible(false)
+          setBindingPatient(null)
+          setSelectedEndoscopeId(null)
+        }}
+      >
+        {bindingPatient && (
+          <div className="space-y-4">
+            <div className="p-3 bg-gray-50 rounded">
+              <p><strong>患者信息:</strong></p>
+              <p>姓名: {bindingPatient.name}</p>
+              <p>患者ID: {bindingPatient.patientId}</p>
+              <p>感染风险: <Tag color={riskLevelConfig[bindingPatient.riskLevel].color}>{riskLevelConfig[bindingPatient.riskLevel].text}</Tag></p>
+            </div>
+            <div>
+              <label className="block mb-2 font-medium">选择要绑定的内镜（仅限使用中状态）:</label>
+              <Select
+                value={selectedEndoscopeId}
+                onChange={(value) => setSelectedEndoscopeId(value)}
+                style={{ width: '100%' }}
+                options={endoscopes
+                  .filter(e => e.status === 'in_use' || e.status === 'available')
+                  .map(e => ({ 
+                    value: e.id, 
+                    label: `${e.serialNumber} - ${e.model} - ${e.status === 'in_use' ? '使用中' : '可领用'}` 
+                  }))
+                }
+                placeholder="请选择内镜"
+              />
+              {endoscopes.filter(e => e.status === 'in_use' || e.status === 'available').length === 0 && (
+                <p className="text-red-500 mt-2">暂无可用的内镜，请先领用内镜</p>
+              )}
+            </div>
+          </div>
+        )}
       </Modal>
     </div>
   )

@@ -10,7 +10,8 @@ import {
   WarningOutlined as AlertTriangleIcon,
   SettingOutlined as WrenchOutlined
 } from '@ant-design/icons'
-import { mockEndoscopes, type Endoscope } from '../data/mockData'
+import { useStore } from '../store/useStore'
+import type { Endoscope } from '../data/mockData'
 
 interface User {
   id: number
@@ -32,7 +33,7 @@ const statusConfig = {
 }
 
 function Endoscope({ user }: EndoscopeProps) {
-  const [endoscopes, setEndoscopes] = useState<Endoscope[]>(mockEndoscopes)
+  const { endoscopes, addEndoscope, updateEndoscope, deleteEndoscope } = useStore()
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false)
   const [editingItem, setEditingItem] = useState<Endoscope | null>(null)
@@ -63,7 +64,7 @@ function Endoscope({ user }: EndoscopeProps) {
           {user.role === 'nurse' && (
             <Popconfirm
               title="确定删除该内镜档案？"
-              onConfirm={() => deleteItem(record.id)}
+              onConfirm={() => handleDelete(record.id)}
               okText="确定"
               cancelText="取消"
             >
@@ -92,25 +93,24 @@ function Endoscope({ user }: EndoscopeProps) {
     setIsDetailModalVisible(true)
   }
 
-  const deleteItem = (id: number) => {
-    setEndoscopes(endoscopes.filter(e => e.id !== id))
+  const handleDelete = (id: number) => {
+    deleteEndoscope(id)
     message.success('删除成功')
   }
 
   const handleOk = () => {
     form.validateFields().then(values => {
       if (editingItem) {
-        setEndoscopes(endoscopes.map(e => e.id === editingItem.id ? { ...e, ...values } : e))
+        updateEndoscope(editingItem.id, values)
         message.success('更新成功')
       } else {
-        const newItem: Endoscope = {
+        addEndoscope({
           ...values,
-          id: Date.now(),
           createdAt: new Date().toISOString().split('T')[0],
           status: 'available',
           totalUsageCount: 0,
-        } as Endoscope
-        setEndoscopes([...endoscopes, newItem])
+          lastMaintenanceDate: new Date().toISOString().split('T')[0],
+        })
         message.success('创建成功')
       }
       setIsModalVisible(false)
@@ -122,11 +122,7 @@ function Endoscope({ user }: EndoscopeProps) {
       message.error('只有可领用状态的内镜才能领用')
       return
     }
-    setEndoscopes(endoscopes.map(e => 
-      e.id === editingItem!.id 
-        ? { ...e, status: 'in_use' as const, location: '内镜室' }
-        : e
-    ))
+    updateEndoscope(editingItem.id, { status: 'in_use', location: '内镜室' })
     message.success('领用成功')
     setIsDetailModalVisible(false)
   }
@@ -136,23 +132,26 @@ function Endoscope({ user }: EndoscopeProps) {
       message.error('只有使用中的内镜才能归还')
       return
     }
-    setEndoscopes(endoscopes.map(e => 
-      e.id === editingItem!.id 
-        ? { ...e, status: 'available' as const, location: 'A区-1号柜', totalUsageCount: e.totalUsageCount + 1 }
-        : e
-    ))
-    message.success('归还成功')
+    updateEndoscope(editingItem.id, { 
+      status: 'cleaning', 
+      location: '洗消间',
+      totalUsageCount: editingItem.totalUsageCount + 1 
+    })
+    message.success('归还成功，内镜已进入待洗消状态')
     setIsDetailModalVisible(false)
   }
 
   const handleIsolate = () => {
     if (!editingItem) return
-    setEndoscopes(endoscopes.map(e => 
-      e.id === editingItem!.id 
-        ? { ...e, status: 'isolated' as const, location: '隔离区' }
-        : e
-    ))
+    updateEndoscope(editingItem.id, { status: 'isolated', location: '隔离区' })
     message.success('已隔离')
+    setIsDetailModalVisible(false)
+  }
+
+  const handleMaintenance = () => {
+    if (!editingItem) return
+    updateEndoscope(editingItem.id, { status: 'maintenance', location: '维修室' })
+    message.success('已申请维护')
     setIsDetailModalVisible(false)
   }
 
@@ -237,7 +236,12 @@ function Endoscope({ user }: EndoscopeProps) {
                   异常隔离
                 </Button>
               )}
-              <Button icon={<WrenchOutlined />}>申请维护</Button>
+              {editingItem.status !== 'maintenance' && (
+                <Button icon={<WrenchOutlined />} onClick={handleMaintenance}>申请维护</Button>
+              )}
+              {editingItem.status === 'maintenance' && (
+                <Button type="primary" onClick={() => updateEndoscope(editingItem.id, { status: 'available', location: 'A区-1号柜' })}>维护完成</Button>
+              )}
             </div>
           </div>
         )}

@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useState, useMemo } from 'react'
 import { Card, Row, Col, Statistic, Button, Select, DatePicker, message } from 'antd'
 import { 
   BarChartOutlined, 
@@ -11,37 +11,78 @@ import {
 import ReactECharts from 'echarts-for-react'
 import { mockReportsData } from '../data/mockData'
 
+const generateMonthlyData = (_month: string) => {
+  const baseQualityRate = 95 + Math.random() * 3
+  const baseTotalCleaning = 280 + Math.floor(Math.random() * 80)
+  const baseAbnormal = Math.floor(Math.random() * 5)
+
+  return {
+    dailyStats: {
+      totalCleaning: baseTotalCleaning,
+      qualityRate: parseFloat(baseQualityRate.toFixed(1)),
+      abnormal: baseAbnormal,
+    },
+    monthlyStats: {
+      labels: ['第1周', '第2周', '第3周', '第4周'],
+      qualityRate: [
+        parseFloat((94 + Math.random() * 4).toFixed(1)),
+        parseFloat((94 + Math.random() * 4).toFixed(1)),
+        parseFloat((94 + Math.random() * 4).toFixed(1)),
+        parseFloat((94 + Math.random() * 4).toFixed(1)),
+      ],
+      totalCount: [
+        Math.floor(60 + Math.random() * 40),
+        Math.floor(70 + Math.random() * 40),
+        Math.floor(65 + Math.random() * 40),
+        Math.floor(85 + Math.random() * 40),
+      ],
+    },
+    equipmentUsage: mockReportsData.equipmentUsage.map(e => ({
+      ...e,
+      rate: Math.floor(70 + Math.random() * 25),
+    })),
+    userWorkload: mockReportsData.userWorkload.map(u => ({
+      ...u,
+      count: Math.floor(80 + Math.random() * 60),
+    })),
+  }
+}
+
 function Reports() {
   const [selectedMonth, setSelectedMonth] = useState('2024-01')
 
-  const qualityRateChartOption = {
+  const currentMonthData = useMemo(() => {
+    return generateMonthlyData(selectedMonth)
+  }, [selectedMonth])
+
+  const qualityRateChartOption = useMemo(() => ({
     tooltip: { trigger: 'axis' },
     legend: { data: ['洗消合格率', '目标值'] },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: mockReportsData.monthlyStats.labels },
+    xAxis: { type: 'category', data: currentMonthData.monthlyStats.labels },
     yAxis: { type: 'value', min: 90, max: 100 },
     series: [
-      { name: '洗消合格率', type: 'line', smooth: true, data: mockReportsData.monthlyStats.qualityRate },
-      { name: '目标值', type: 'line', data: [95, 95, 95, 95, 95], lineStyle: { type: 'dashed', color: '#F59E0B' } }
+      { name: '洗消合格率', type: 'line', smooth: true, data: currentMonthData.monthlyStats.qualityRate },
+      { name: '目标值', type: 'line', data: [95, 95, 95, 95], lineStyle: { type: 'dashed', color: '#F59E0B' } }
     ]
-  }
+  }), [currentMonthData.monthlyStats])
 
-  const totalCountChartOption = {
+  const totalCountChartOption = useMemo(() => ({
     tooltip: { trigger: 'axis' },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
-    xAxis: { type: 'category', data: mockReportsData.monthlyStats.labels },
+    xAxis: { type: 'category', data: currentMonthData.monthlyStats.labels },
     yAxis: { type: 'value' },
-    series: [{ type: 'bar', data: mockReportsData.monthlyStats.totalCount, itemStyle: { color: '#3B82F6' } }]
-  }
+    series: [{ type: 'bar', data: currentMonthData.monthlyStats.totalCount, itemStyle: { color: '#3B82F6' } }]
+  }), [currentMonthData.monthlyStats])
 
-  const equipmentUsageChartOption = {
+  const equipmentUsageChartOption = useMemo(() => ({
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     grid: { left: '3%', right: '4%', bottom: '3%', containLabel: true },
     xAxis: { type: 'value', max: 100 },
-    yAxis: { type: 'category', data: mockReportsData.equipmentUsage.map(e => e.name) },
+    yAxis: { type: 'category', data: currentMonthData.equipmentUsage.map(e => e.name) },
     series: [{ 
       type: 'bar', 
-      data: mockReportsData.equipmentUsage.map(e => e.rate),
+      data: currentMonthData.equipmentUsage.map(e => e.rate),
       itemStyle: { 
         color: {
           type: 'linear',
@@ -53,9 +94,9 @@ function Reports() {
         }
       }
     }]
-  }
+  }), [currentMonthData.equipmentUsage])
 
-  const userWorkloadChartOption = {
+  const userWorkloadChartOption = useMemo(() => ({
     tooltip: { trigger: 'item' },
     legend: { bottom: 0 },
     series: [{
@@ -64,17 +105,38 @@ function Reports() {
       avoidLabelOverlap: false,
       itemStyle: { borderRadius: 8 },
       label: { show: true },
-      data: mockReportsData.userWorkload.map((u, i) => ({
+      data: currentMonthData.userWorkload.map((u, i) => ({
         value: u.count,
         name: u.name,
         itemStyle: { color: ['#10B981', '#3B82F6', '#F59E0B'][i] }
       }))
     }]
-  }
+  }), [currentMonthData.userWorkload])
 
   const handleExport = () => {
     message.success('报表已导出')
   }
+
+  const handleMonthChange = (value: string) => {
+    setSelectedMonth(value)
+  }
+
+  const getMonthOptions = () => {
+    const options = []
+    const today = new Date()
+    for (let i = 0; i < 12; i++) {
+      const date = new Date(today.getFullYear(), today.getMonth() - i, 1)
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      options.push({
+        value: `${year}-${month}`,
+        label: `${year}年${month}月`,
+      })
+    }
+    return options
+  }
+
+  const totalWorkload = currentMonthData.userWorkload.reduce((sum, u) => sum + u.count, 0)
 
   return (
     <div className="space-y-6">
@@ -82,15 +144,21 @@ function Reports() {
         <div className="flex items-center gap-4">
           <Select 
             value={selectedMonth} 
-            onChange={setSelectedMonth}
+            onChange={handleMonthChange}
             style={{ width: 200 }}
-            options={[
-              { value: '2024-01', label: '2024年1月' },
-              { value: '2023-12', label: '2023年12月' },
-              { value: '2023-11', label: '2023年11月' },
-            ]}
+            options={getMonthOptions()}
           />
-          <DatePicker picker="month" />
+          <DatePicker 
+            picker="month" 
+            value={selectedMonth ? new Date(selectedMonth) : undefined}
+            onChange={(date) => {
+              if (date) {
+                const year = date.getFullYear()
+                const month = String(date.getMonth() + 1).padStart(2, '0')
+                setSelectedMonth(`${year}-${month}`)
+              }
+            }}
+          />
         </div>
         <Button type="primary" icon={<DownloadOutlined />} onClick={handleExport}>
           导出报表
@@ -102,40 +170,40 @@ function Reports() {
           <Card className="text-center">
             <Statistic 
               title="洗消总量" 
-              value={mockReportsData.dailyStats.totalCleaning} 
+              value={currentMonthData.dailyStats.totalCleaning} 
               prefix={<BarChartOutlined className="text-primary" />}
             />
-            <p className="text-sm text-gray-500 mt-2">本月累计</p>
+            <p className="text-sm text-gray-500 mt-2">{selectedMonth}累计</p>
           </Card>
         </Col>
         <Col span={6}>
           <Card className="text-center">
             <Statistic 
               title="洗消合格率" 
-              value={mockReportsData.dailyStats.qualityRate} 
+              value={currentMonthData.dailyStats.qualityRate} 
               suffix="%"
-              valueStyle={{ color: '#10B981' }}
+              valueStyle={{ color: currentMonthData.dailyStats.qualityRate >= 95 ? '#10B981' : '#F59E0B' }}
               prefix={<TrendingUpOutlined />}
             />
-            <p className="text-sm text-gray-500 mt-2">较上月 +0.8%</p>
+            <p className="text-sm text-gray-500 mt-2">目标: 95%</p>
           </Card>
         </Col>
         <Col span={6}>
           <Card className="text-center">
             <Statistic 
               title="异常数量" 
-              value={mockReportsData.dailyStats.abnormal} 
-              valueStyle={{ color: mockReportsData.dailyStats.abnormal > 0 ? '#EF4444' : '#10B981' }}
+              value={currentMonthData.dailyStats.abnormal} 
+              valueStyle={{ color: currentMonthData.dailyStats.abnormal > 0 ? '#EF4444' : '#10B981' }}
               prefix={<AlertTriangleIcon />}
             />
-            <p className="text-sm text-gray-500 mt-2">本月异常</p>
+            <p className="text-sm text-gray-500 mt-2">{selectedMonth}异常</p>
           </Card>
         </Col>
         <Col span={6}>
           <Card className="text-center">
             <Statistic 
               title="设备利用率" 
-              value={85} 
+              value={Math.floor(currentMonthData.equipmentUsage.reduce((sum, e) => sum + e.rate, 0) / currentMonthData.equipmentUsage.length)} 
               suffix="%"
               prefix={<ClockCircleOutlined className="text-secondary" />}
             />
@@ -175,7 +243,7 @@ function Reports() {
           <Col span={8}>
             <h4 className="font-medium mb-3">设备使用详情</h4>
             <div className="space-y-2">
-              {mockReportsData.equipmentUsage.map(item => (
+              {currentMonthData.equipmentUsage.map(item => (
                 <div key={item.name} className="flex justify-between items-center">
                   <span>{item.name}</span>
                   <div className="flex items-center gap-2">
@@ -191,7 +259,7 @@ function Reports() {
           <Col span={8}>
             <h4 className="font-medium mb-3">人员工作量</h4>
             <div className="space-y-2">
-              {mockReportsData.userWorkload.map(item => (
+              {currentMonthData.userWorkload.map(item => (
                 <div key={item.name} className="flex justify-between items-center">
                   <div className="flex items-center gap-2">
                     <UsersOutlined className="text-primary" />
@@ -205,7 +273,7 @@ function Reports() {
               <div className="flex justify-between">
                 <span>总计</span>
                 <span className="font-bold text-lg">
-                  {mockReportsData.userWorkload.reduce((sum, u) => sum + u.count, 0)} 次
+                  {totalWorkload} 次
                 </span>
               </div>
             </div>

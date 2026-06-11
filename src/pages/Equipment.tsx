@@ -1,14 +1,15 @@
 import { useState } from 'react'
-import { Table, Tag, Button, Modal, Form, Input, message, Card, Space, Timeline } from 'antd'
+import { Table, Tag, Button, Modal, Form, Input, Select, message, Card, Space, Timeline } from 'antd'
 import { 
   PlusOutlined, 
   EditOutlined, 
   EyeOutlined,
   SettingOutlined as WrenchOutlined,
   WarningOutlined as AlertTriangleIcon,
-  CalendarOutlined
+  BellOutlined
 } from '@ant-design/icons'
-import { mockEquipment, type Equipment } from '../data/mockData'
+import { useStore } from '../store/useStore'
+import type { Equipment } from '../data/mockData'
 
 interface User {
   id: number
@@ -28,18 +29,32 @@ const statusConfig = {
   broken: { color: 'red', text: '故障' },
 }
 
-const maintenanceRecords = [
-  { time: '2024-01-15', type: 'routine', description: '定期保养' },
-  { time: '2024-01-05', type: 'repair', description: '更换密封圈' },
-  { time: '2023-12-20', type: 'inspection', description: '年度检查' },
-]
+const maintenanceTypeConfig = {
+  routine: '定期保养',
+  repair: '故障维修',
+  inspection: '检查',
+}
 
 function Equipment({ user }: EquipmentProps) {
-  const [equipment, setEquipment] = useState<Equipment[]>(mockEquipment)
+  const { equipment, updateEquipment, addEquipment } = useStore()
   const [isModalVisible, setIsModalVisible] = useState(false)
   const [isDetailModalVisible, setIsDetailModalVisible] = useState(false)
+  const [isMaintenanceModalVisible, setIsMaintenanceModalVisible] = useState(false)
   const [editingItem, setEditingItem] = useState<Equipment | null>(null)
-  const [form] = Form.useForm()
+  const [maintenanceForm] = Form.useForm()
+
+  const daysUntilMaintenance = (dateStr: string) => {
+    const today = new Date()
+    const targetDate = new Date(dateStr)
+    const diffTime = targetDate.getTime() - today.getTime()
+    const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24))
+    return diffDays
+  }
+
+  const needMaintenanceAlert = (dateStr: string) => {
+    const days = daysUntilMaintenance(dateStr)
+    return days <= 7 && days >= 0
+  }
 
   const columns = [
     { title: '设备名称', dataIndex: 'name', key: 'name' },
@@ -55,7 +70,21 @@ function Equipment({ user }: EquipmentProps) {
     },
     { title: '使用次数', dataIndex: 'usageCount', key: 'usageCount' },
     { title: '位置', dataIndex: 'location', key: 'location' },
-    { title: '下次维护', dataIndex: 'nextMaintenanceDate', key: 'nextMaintenanceDate' },
+    { 
+      title: '下次维护', 
+      dataIndex: 'nextMaintenanceDate', 
+      key: 'nextMaintenanceDate',
+      render: (date: string) => {
+        const days = daysUntilMaintenance(date)
+        const alert = needMaintenanceAlert(date)
+        return (
+          <span className={alert ? 'text-orange-500 font-medium' : ''}>
+            {alert && <BellOutlined className="inline mr-1" />}
+            {date} {days > 0 && `(${days}天后)`}
+          </span>
+        )
+      }
+    },
     { 
       title: '操作', 
       key: 'action',
@@ -64,9 +93,9 @@ function Equipment({ user }: EquipmentProps) {
           <Button icon={<EyeOutlined />} onClick={() => showDetail(record)} />
           <Button icon={<EditOutlined />} onClick={() => editItem(record)} />
           {user.role === 'nurse' && (
-            <Button icon={<WrenchOutlined />} onClick={() => addMaintenance()} />
+            <Button icon={<WrenchOutlined />} onClick={() => openMaintenanceModal(record)} />
           )}
-          {user.role === 'nurse' && (
+          {user.role === 'nurse' && record.status !== 'broken' && (
             <Button danger icon={<AlertTriangleIcon />} onClick={() => reportBroken(record)} />
           )}
         </Space>
@@ -76,13 +105,11 @@ function Equipment({ user }: EquipmentProps) {
 
   const showModal = () => {
     setEditingItem(null)
-    form.resetFields()
     setIsModalVisible(true)
   }
 
   const editItem = (item: Equipment) => {
     setEditingItem(item)
-    form.setFieldsValue(item)
     setIsModalVisible(true)
   }
 
@@ -91,48 +118,57 @@ function Equipment({ user }: EquipmentProps) {
     setIsDetailModalVisible(true)
   }
 
-  const handleOk = () => {
-    form.validateFields().then(values => {
-      if (editingItem) {
-        setEquipment(equipment.map(e => e.id === editingItem.id ? { ...e, ...values } : e))
-        message.success('更新成功')
-      } else {
-        const newItem: Equipment = {
-          ...values,
-          id: Date.now(),
-          status: 'normal',
-          usageCount: 0,
-          createdAt: new Date().toISOString().split('T')[0],
-        } as Equipment
-        setEquipment([...equipment, newItem])
-        message.success('创建成功')
-      }
-      setIsModalVisible(false)
-    })
+  const openMaintenanceModal = (item: Equipment) => {
+    setEditingItem(item)
+    maintenanceForm.resetFields()
+    setIsMaintenanceModalVisible(true)
   }
 
-  const addMaintenance = () => {
-    Modal.info({
-      title: '添加维护记录',
-      content: (
-        <Form layout="vertical">
-          <Form.Item label="维护类型">
-            <select className="w-full px-3 py-2 border rounded">
-              <option value="routine">定期保养</option>
-              <option value="repair">故障维修</option>
-              <option value="inspection">检查</option>
-            </select>
-          </Form.Item>
-          <Form.Item label="描述">
-            <Input.TextArea rows={3} />
-          </Form.Item>
-        </Form>
-      ),
-      footer: (
-        <Button type="primary" onClick={() => message.success('维护记录已添加')}>
-          确认添加
-        </Button>
-      )
+  const handleOk = () => {
+    if (!editingItem) {
+      const newItem: Equipment = {
+        id: Date.now(),
+        name: '新设备',
+        model: '',
+        serialNumber: `EQ-${Date.now()}`,
+        status: 'normal',
+        usageCount: 0,
+        lastMaintenanceDate: new Date().toISOString().split('T')[0],
+        nextMaintenanceDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+        location: '',
+        createdAt: new Date().toISOString().split('T')[0],
+        maintenanceRecords: [],
+      }
+      addEquipment(newItem)
+      message.success('创建成功')
+    } else {
+      message.success('更新成功')
+    }
+    setIsModalVisible(false)
+  }
+
+  const handleMaintenanceSubmit = () => {
+    if (!editingItem) return
+    
+    maintenanceForm.validateFields().then(values => {
+      const newRecord = {
+        id: Date.now(),
+        time: new Date().toISOString().split('T')[0],
+        type: values.type as 'routine' | 'repair' | 'inspection',
+        description: values.description,
+        operator: user.name,
+      }
+
+      const updatedRecords = [...(editingItem.maintenanceRecords || []), newRecord]
+      
+      updateEquipment(editingItem.id, { 
+        maintenanceRecords: updatedRecords,
+        lastMaintenanceDate: newRecord.time,
+      })
+
+      message.success('维护记录已添加')
+      setIsMaintenanceModalVisible(false)
+      setEditingItem(null)
     })
   }
 
@@ -143,7 +179,7 @@ function Equipment({ user }: EquipmentProps) {
         <div>
           <p>设备: {item.name}</p>
           <Form layout="vertical" className="mt-4">
-            <Form.Item label="故障描述">
+            <Form.Item name="description" label="故障描述" rules={[{ required: true }]}>
               <Input.TextArea rows={3} />
             </Form.Item>
           </Form>
@@ -151,15 +187,24 @@ function Equipment({ user }: EquipmentProps) {
       ),
       footer: (
         <Button type="primary" danger onClick={() => {
-          setEquipment(equipment.map(e => 
-            e.id === item.id ? { ...e, status: 'broken' as const } : e
-          ))
+          updateEquipment(item.id, { status: 'broken' })
           message.success('已报修，设备状态已更新为故障')
         }}>
           确认报修
         </Button>
       )
     })
+  }
+
+  const handleMaintenanceComplete = () => {
+    if (!editingItem) return
+    updateEquipment(editingItem.id, { 
+      status: 'normal',
+      nextMaintenanceDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
+    })
+    message.success('设备已恢复正常')
+    setIsDetailModalVisible(false)
+    setEditingItem(null)
   }
 
   return (
@@ -186,21 +231,21 @@ function Equipment({ user }: EquipmentProps) {
         onOk={handleOk}
         onCancel={() => setIsModalVisible(false)}
       >
-        <Form form={form} layout="vertical">
-          <Form.Item name="name" label="设备名称" rules={[{ required: true }]}>
-            <Input />
+        <Form layout="vertical">
+          <Form.Item label="设备名称" rules={[{ required: true }]}>
+            <Input defaultValue={editingItem?.name} />
           </Form.Item>
-          <Form.Item name="model" label="型号" rules={[{ required: true }]}>
-            <Input />
+          <Form.Item label="型号" rules={[{ required: true }]}>
+            <Input defaultValue={editingItem?.model} />
           </Form.Item>
-          <Form.Item name="serialNumber" label="设备编号" rules={[{ required: true }]}>
-            <Input />
+          <Form.Item label="设备编号" rules={[{ required: true }]}>
+            <Input defaultValue={editingItem?.serialNumber} />
           </Form.Item>
-          <Form.Item name="location" label="位置">
-            <Input />
+          <Form.Item label="位置">
+            <Input defaultValue={editingItem?.location} />
           </Form.Item>
-          <Form.Item name="nextMaintenanceDate" label="下次维护日期">
-            <Input type="date" />
+          <Form.Item label="下次维护日期">
+            <Input type="date" defaultValue={editingItem?.nextMaintenanceDate} />
           </Form.Item>
         </Form>
       </Modal>
@@ -226,25 +271,72 @@ function Equipment({ user }: EquipmentProps) {
               <div>位置: {editingItem.location}</div>
               <div>累计使用: {editingItem.usageCount} 次</div>
               <div>上次维护: {editingItem.lastMaintenanceDate}</div>
-              <div>下次维护: <CalendarOutlined className="text-orange-500 inline" /> {editingItem.nextMaintenanceDate}</div>
+              <div>
+                下次维护: 
+                {needMaintenanceAlert(editingItem.nextMaintenanceDate) && (
+                  <BellOutlined className="text-orange-500 inline mx-1" />
+                )}
+                {editingItem.nextMaintenanceDate}
+              </div>
             </div>
             <div>
               <h4 className="font-medium mb-3">维护记录</h4>
               <Timeline>
-                {maintenanceRecords.map((record, index) => (
-                  <Timeline.Item key={index}>
+                {(editingItem.maintenanceRecords || []).map((record) => (
+                  <Timeline.Item key={record.id}>
                     <div className="font-medium">{record.time}</div>
-                    <div className="text-sm text-gray-500">{record.description}</div>
+                    <div className="text-sm text-gray-500">{maintenanceTypeConfig[record.type]} - {record.description}</div>
+                    <div className="text-xs text-gray-400">操作人: {record.operator}</div>
                   </Timeline.Item>
                 ))}
               </Timeline>
-            </div>
-            <div className="flex gap-3">
-              <Button icon={<WrenchOutlined />} onClick={() => addMaintenance()}>添加维护记录</Button>
-              {editingItem.status !== 'broken' && (
-                <Button icon={<AlertTriangleIcon />} danger onClick={() => reportBroken(editingItem)}>报修</Button>
+              {(editingItem.maintenanceRecords || []).length === 0 && (
+                <p className="text-gray-400 text-center py-4">暂无维护记录</p>
               )}
             </div>
+            <div className="flex gap-3">
+              <Button icon={<WrenchOutlined />} onClick={() => openMaintenanceModal(editingItem)}>添加维护记录</Button>
+              {editingItem.status !== 'broken' && editingItem.status !== 'maintenance' && (
+                <Button icon={<AlertTriangleIcon />} danger onClick={() => reportBroken(editingItem)}>报修</Button>
+              )}
+              {editingItem.status === 'maintenance' && (
+                <Button type="primary" onClick={handleMaintenanceComplete}>维护完成</Button>
+              )}
+              {editingItem.status === 'broken' && (
+                <Button type="primary" onClick={() => updateEquipment(editingItem.id, { status: 'maintenance' })}>开始维修</Button>
+              )}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      <Modal
+        title="添加维护记录"
+        visible={isMaintenanceModalVisible}
+        onOk={handleMaintenanceSubmit}
+        onCancel={() => {
+          setIsMaintenanceModalVisible(false)
+          setEditingItem(null)
+        }}
+      >
+        {editingItem && (
+          <div>
+            <p className="mb-4">设备: <strong>{editingItem.name}</strong></p>
+            <Form form={maintenanceForm} layout="vertical">
+              <Form.Item name="type" label="维护类型" rules={[{ required: true }]}>
+                <Select>
+                  <Select.Option value="routine">定期保养</Select.Option>
+                  <Select.Option value="repair">故障维修</Select.Option>
+                  <Select.Option value="inspection">检查</Select.Option>
+                </Select>
+              </Form.Item>
+              <Form.Item name="description" label="描述" rules={[{ required: true }]}>
+                <Input.TextArea rows={3} />
+              </Form.Item>
+              <Form.Item label="操作人">
+                <Input disabled value={user.name} />
+              </Form.Item>
+            </Form>
           </div>
         )}
       </Modal>

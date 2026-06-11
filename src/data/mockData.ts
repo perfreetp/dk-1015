@@ -43,6 +43,14 @@ export interface CleaningBatch {
   createdAt: string
 }
 
+export interface MaintenanceRecord {
+  id: number
+  time: string
+  type: 'routine' | 'repair' | 'inspection'
+  description: string
+  operator: string
+}
+
 export interface Equipment {
   id: number
   name: string
@@ -54,6 +62,7 @@ export interface Equipment {
   nextMaintenanceDate: string
   location: string
   createdAt: string
+  maintenanceRecords?: MaintenanceRecord[]
 }
 
 export interface QCSample {
@@ -135,10 +144,68 @@ export const mockCleaningBatches: CleaningBatch[] = [
 ]
 
 export const mockEquipment: Equipment[] = [
-  { id: 1, name: '内镜清洗机A1', model: 'EW-280', serialNumber: 'EQ-001', status: 'running', usageCount: 1250, lastMaintenanceDate: '2024-01-01', nextMaintenanceDate: '2024-02-01', location: '洗消间-1号', createdAt: '2023-06-01' },
-  { id: 2, name: '内镜清洗机A2', model: 'EW-280', serialNumber: 'EQ-002', status: 'normal', usageCount: 1180, lastMaintenanceDate: '2024-01-05', nextMaintenanceDate: '2024-02-05', location: '洗消间-2号', createdAt: '2023-06-01' },
-  { id: 3, name: '高压灭菌器B1', model: 'SQ-500', serialNumber: 'EQ-003', status: 'maintenance', usageCount: 890, lastMaintenanceDate: '2024-01-10', nextMaintenanceDate: '2024-02-10', location: '消毒室', createdAt: '2023-03-01' },
-  { id: 4, name: '干燥柜C1', model: 'GZ-300', serialNumber: 'EQ-004', status: 'normal', usageCount: 2100, lastMaintenanceDate: '2024-01-08', nextMaintenanceDate: '2024-02-08', location: '存储区-A', createdAt: '2023-01-01' },
+  { 
+    id: 1, 
+    name: '内镜清洗机A1', 
+    model: 'EW-280', 
+    serialNumber: 'EQ-001', 
+    status: 'running', 
+    usageCount: 1250, 
+    lastMaintenanceDate: '2024-01-01', 
+    nextMaintenanceDate: '2024-02-01', 
+    location: '洗消间-1号', 
+    createdAt: '2023-06-01',
+    maintenanceRecords: [
+      { id: 1, time: '2024-01-01', type: 'routine', description: '定期保养', operator: '工程师王' },
+      { id: 2, time: '2023-12-15', type: 'repair', description: '更换水泵', operator: '工程师王' },
+    ]
+  },
+  { 
+    id: 2, 
+    name: '内镜清洗机A2', 
+    model: 'EW-280', 
+    serialNumber: 'EQ-002', 
+    status: 'normal', 
+    usageCount: 1180, 
+    lastMaintenanceDate: '2024-01-05', 
+    nextMaintenanceDate: '2024-02-05', 
+    location: '洗消间-2号', 
+    createdAt: '2023-06-01',
+    maintenanceRecords: [
+      { id: 1, time: '2024-01-05', type: 'routine', description: '定期保养', operator: '工程师李' },
+    ]
+  },
+  { 
+    id: 3, 
+    name: '高压灭菌器B1', 
+    model: 'SQ-500', 
+    serialNumber: 'EQ-003', 
+    status: 'maintenance', 
+    usageCount: 890, 
+    lastMaintenanceDate: '2024-01-10', 
+    nextMaintenanceDate: '2024-02-10', 
+    location: '消毒室', 
+    createdAt: '2023-03-01',
+    maintenanceRecords: [
+      { id: 1, time: '2024-01-10', type: 'repair', description: '更换加热管', operator: '工程师王' },
+      { id: 2, time: '2023-12-20', type: 'inspection', description: '年度检查', operator: '工程师李' },
+    ]
+  },
+  { 
+    id: 4, 
+    name: '干燥柜C1', 
+    model: 'GZ-300', 
+    serialNumber: 'EQ-004', 
+    status: 'normal', 
+    usageCount: 2100, 
+    lastMaintenanceDate: '2024-01-08', 
+    nextMaintenanceDate: '2024-02-08', 
+    location: '存储区-A', 
+    createdAt: '2023-01-01',
+    maintenanceRecords: [
+      { id: 1, time: '2024-01-08', type: 'routine', description: '定期保养', operator: '工程师王' },
+    ]
+  },
 ]
 
 export const mockQCSamples: QCSample[] = [
