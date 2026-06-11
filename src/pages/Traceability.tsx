@@ -1,11 +1,15 @@
 import { useState } from 'react'
-import { Table, Tag, Button, Modal, Form, Input, DatePicker, Card, Space } from 'antd'
+import { useNavigate } from 'react-router-dom'
+import { Table, Tag, Button, Modal, Form, Input, DatePicker, Card, Space, Select } from 'antd'
 import { 
   SearchOutlined, 
   PrinterOutlined, 
   FileTextOutlined,
   CalendarOutlined,
-  BarcodeOutlined
+  BarcodeOutlined,
+  UserOutlined,
+  ExperimentOutlined as EndoscopeOutlined,
+  RightCircleOutlined
 } from '@ant-design/icons'
 import { useStore } from '../store/useStore'
 import type { CleaningBatch } from '../data/mockData'
@@ -44,10 +48,13 @@ const programLabelMap: Record<string, string> = {
 }
 
 function Traceability({ user }: TraceabilityProps) {
+  const navigate = useNavigate()
   const { batches, patients, endoscopes } = useStore()
   const [searchParams, setSearchParams] = useState({
     batchNumber: '',
     endoscopeSerial: '',
+    patientName: '',
+    status: undefined as string | undefined,
     dateRange: undefined as undefined | [Date, Date],
   })
   const [showDetailModal, setShowDetailModal] = useState(false)
@@ -58,6 +65,8 @@ function Traceability({ user }: TraceabilityProps) {
   const filteredBatches = batches.filter(batch => {
     if (searchParams.batchNumber && !batch.batchNumber.includes(searchParams.batchNumber)) return false
     if (searchParams.endoscopeSerial && !batch.endoscopeSerial.includes(searchParams.endoscopeSerial)) return false
+    if (searchParams.patientName && !(batch.patientName || '').includes(searchParams.patientName)) return false
+    if (searchParams.status && batch.status !== searchParams.status) return false
     
     if (searchParams.dateRange && searchParams.dateRange.length === 2) {
       const [startDate, endDate] = searchParams.dateRange
@@ -104,12 +113,24 @@ function Traceability({ user }: TraceabilityProps) {
   ]
 
   const handleSearch = () => {
-    const values = form.getFieldsValue() as { batchNumber?: string; endoscopeSerial?: string; dateRange?: [Date, Date] }
+    const values = form.getFieldsValue() as { 
+      batchNumber?: string
+      endoscopeSerial?: string
+      patientName?: string
+      status?: string
+      dateRange?: [Date, Date] 
+    }
     setSearchParams({
       batchNumber: values.batchNumber || '',
       endoscopeSerial: values.endoscopeSerial || '',
+      patientName: values.patientName || '',
+      status: values.status,
       dateRange: values.dateRange,
     })
+  }
+
+  const goToCleaning = (batchId: number) => {
+    navigate('/cleaning', { state: { batchId } })
   }
 
   const viewDetail = (batch: CleaningBatch) => {
@@ -330,21 +351,41 @@ function Traceability({ user }: TraceabilityProps) {
             <Input 
               prefix={<BarcodeOutlined />}
               placeholder="批次号" 
-              style={{ width: 200 }}
+              style={{ width: 180 }}
             />
           </Form.Item>
           <Form.Item name="endoscopeSerial">
             <Input 
-              prefix={<SearchOutlined />}
+              prefix={<EndoscopeOutlined />}
               placeholder="内镜编号" 
-              style={{ width: 200 }}
+              style={{ width: 180 }}
+            />
+          </Form.Item>
+          <Form.Item name="patientName">
+            <Input 
+              prefix={<UserOutlined />}
+              placeholder="患者姓名" 
+              style={{ width: 150 }}
+            />
+          </Form.Item>
+          <Form.Item name="status">
+            <Select
+              placeholder="批次状态"
+              style={{ width: 120 }}
+              allowClear
+              options={[
+                { value: 'pending', label: '待开始' },
+                { value: 'processing', label: '处理中' },
+                { value: 'completed', label: '已完成' },
+                { value: 'abnormal', label: '异常' },
+              ]}
             />
           </Form.Item>
           <Form.Item name="dateRange">
             <DatePicker.RangePicker 
               prefix={<CalendarOutlined />}
               placeholder={['开始日期', '结束日期']}
-              style={{ width: 300 }}
+              style={{ width: 280 }}
             />
           </Form.Item>
           <Form.Item>
@@ -476,6 +517,15 @@ function Traceability({ user }: TraceabilityProps) {
 
             <div className="flex justify-end gap-3">
               <Button onClick={() => setShowDetailModal(false)}>关闭</Button>
+              {selectedBatch.status !== 'completed' && selectedBatch.status !== 'abnormal' && (
+                <Button 
+                  type="default" 
+                  icon={<RightCircleOutlined />}
+                  onClick={() => goToCleaning(selectedBatch.id)}
+                >
+                  继续处理
+                </Button>
+              )}
               <Button type="primary" icon={<PrinterOutlined />} onClick={() => openPrintModal(selectedBatch)}>打印追溯单</Button>
             </div>
           </div>

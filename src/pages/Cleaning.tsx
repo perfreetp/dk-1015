@@ -1,4 +1,5 @@
 import { useState, useEffect } from 'react'
+import { useLocation } from 'react-router-dom'
 import { Card, Steps, Button, Form, Input, Select, Radio, message, Modal, Table, Tag, Space } from 'antd'
 import { 
   PlayCircleOutlined, 
@@ -45,6 +46,7 @@ const storageLocations = [
 ]
 
 function Cleaning({ user }: CleaningProps) {
+  const location = useLocation()
   const { batches, endoscopes, addBatch, updateBatch, updateEndoscopeStatus } = useStore()
   const [currentStep, setCurrentStep] = useState(0)
   const [isRunning, setIsRunning] = useState(false)
@@ -55,6 +57,18 @@ function Cleaning({ user }: CleaningProps) {
   const [selectedEndoscopeId, setSelectedEndoscopeId] = useState<number | null>(null)
   const [form] = Form.useForm()
   const [stepDetails, setStepDetails] = useState<StepDetails>({})
+
+  useEffect(() => {
+    const state = location.state as { batchId?: number } | null
+    if (state?.batchId) {
+      const batch = batches.find(b => b.id === state.batchId)
+      if (batch && batch.status !== 'completed' && batch.status !== 'abnormal') {
+        setSelectedBatch(batch)
+        setCurrentStep(batch.currentStep)
+        setStepDetails(batch.stepDetails || {})
+      }
+    }
+  }, [location.state, batches])
 
   useEffect(() => {
     let interval: number
@@ -216,8 +230,10 @@ function Cleaning({ user }: CleaningProps) {
     }
     
     const newStep = currentStep + 1
+    const newStatus = currentBatch.status === 'pending' ? 'processing' : currentBatch.status
     updateBatch(selectedBatch.id, { 
       currentStep: newStep,
+      status: newStatus,
       steps: {
         ...selectedBatch.steps,
         ...(currentStep === 0 && { preprocess: true }),
@@ -595,6 +611,25 @@ function Cleaning({ user }: CleaningProps) {
                 </div>
               </div>
             </div>
+            {selectedBatch.status !== 'completed' && selectedBatch.status !== 'abnormal' && (
+              <div className="flex justify-end">
+                <Button 
+                  type="primary" 
+                  icon={<CheckCircleOutlined />}
+                  onClick={() => {
+                    const batchFromStore = batches.find(b => b.id === selectedBatch.id)
+                    if (batchFromStore) {
+                      setSelectedBatch(batchFromStore)
+                      setCurrentStep(batchFromStore.currentStep)
+                      setStepDetails(batchFromStore.stepDetails || {})
+                      setShowDetailModal(false)
+                    }
+                  }}
+                >
+                  继续操作
+                </Button>
+              </div>
+            )}
           </div>
         )}
       </Modal>

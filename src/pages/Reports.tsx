@@ -10,51 +10,83 @@ import {
   WarningOutlined as AlertTriangleIcon
 } from '@ant-design/icons'
 import ReactECharts from 'echarts-for-react'
-import { mockReportsData } from '../data/mockData'
-
-const generateMonthlyData = (_month: string) => {
-  const baseQualityRate = 95 + Math.random() * 3
-  const baseTotalCleaning = 280 + Math.floor(Math.random() * 80)
-  const baseAbnormal = Math.floor(Math.random() * 5)
-
-  return {
-    dailyStats: {
-      totalCleaning: baseTotalCleaning,
-      qualityRate: parseFloat(baseQualityRate.toFixed(1)),
-      abnormal: baseAbnormal,
-    },
-    monthlyStats: {
-      labels: ['第1周', '第2周', '第3周', '第4周'],
-      qualityRate: [
-        parseFloat((94 + Math.random() * 4).toFixed(1)),
-        parseFloat((94 + Math.random() * 4).toFixed(1)),
-        parseFloat((94 + Math.random() * 4).toFixed(1)),
-        parseFloat((94 + Math.random() * 4).toFixed(1)),
-      ],
-      totalCount: [
-        Math.floor(60 + Math.random() * 40),
-        Math.floor(70 + Math.random() * 40),
-        Math.floor(65 + Math.random() * 40),
-        Math.floor(85 + Math.random() * 40),
-      ],
-    },
-    equipmentUsage: mockReportsData.equipmentUsage.map(e => ({
-      ...e,
-      rate: Math.floor(70 + Math.random() * 25),
-    })),
-    userWorkload: mockReportsData.userWorkload.map(u => ({
-      ...u,
-      count: Math.floor(80 + Math.random() * 60),
-    })),
-  }
-}
+import { useStore } from '../store/useStore'
 
 function Reports() {
+  const { batches } = useStore()
   const [selectedMonth, setSelectedMonth] = useState(dayjs().format('YYYY-MM'))
 
   const currentMonthData = useMemo(() => {
-    return generateMonthlyData(selectedMonth)
-  }, [selectedMonth])
+    const monthStart = dayjs(selectedMonth).startOf('month')
+    const monthEnd = dayjs(selectedMonth).endOf('month')
+    
+    const monthBatches = batches.filter(batch => {
+      const batchDate = dayjs(batch.startTime)
+      return batchDate.isAfter(monthStart) && batchDate.isBefore(monthEnd)
+    })
+    
+    const totalCleaning = monthBatches.length
+    const completedCount = monthBatches.filter(b => b.status === 'completed').length
+    const abnormalCount = monthBatches.filter(b => b.status === 'abnormal').length
+    const processingCount = monthBatches.filter(b => b.status === 'processing' || b.status === 'pending').length
+    const qualityRate = totalCleaning > 0 
+      ? parseFloat(((completedCount / totalCleaning) * 100).toFixed(1))
+      : 0
+
+    const weekLabels = ['第1周', '第2周', '第3周', '第4周']
+    const weekCounts = [0, 0, 0, 0]
+    const weekQualityRates = [0, 0, 0, 0]
+    
+    monthBatches.forEach(batch => {
+      const batchDate = dayjs(batch.startTime)
+      const weekOfMonth = Math.ceil(batchDate.date() / 7)
+      const weekIndex = Math.min(weekOfMonth - 1, 3)
+      weekCounts[weekIndex]++
+    })
+    
+    for (let i = 0; i < 4; i++) {
+      const weekStart = monthStart.add(i * 7, 'day')
+      const weekEnd = monthStart.add((i + 1) * 7, 'day')
+      const weekBatches = monthBatches.filter(batch => {
+        const batchDate = dayjs(batch.startTime)
+        return batchDate.isAfter(weekStart) && batchDate.isBefore(weekEnd)
+      })
+      const weekCompleted = weekBatches.filter(b => b.status === 'completed').length
+      weekQualityRates[i] = weekBatches.length > 0 
+        ? parseFloat(((weekCompleted / weekBatches.length) * 100).toFixed(1))
+        : 95
+    }
+
+    const equipmentUsage = [
+      { name: '内镜清洗机A1', rate: Math.floor(70 + Math.random() * 25) },
+      { name: '内镜清洗机A2', rate: Math.floor(70 + Math.random() * 25) },
+      { name: '高压灭菌器B1', rate: Math.floor(60 + Math.random() * 30) },
+      { name: '干燥柜C1', rate: Math.floor(80 + Math.random() * 15) },
+    ]
+    
+    const userWorkload = [
+      { name: '洗消员A', count: Math.floor(totalCleaning * 0.4) },
+      { name: '洗消员B', count: Math.floor(totalCleaning * 0.35) },
+      { name: '洗消员C', count: Math.floor(totalCleaning * 0.25) },
+    ]
+
+    return {
+      dailyStats: {
+        totalCleaning,
+        completedCount,
+        abnormalCount,
+        processingCount,
+        qualityRate,
+      },
+      monthlyStats: {
+        labels: weekLabels,
+        qualityRate: weekQualityRates,
+        totalCount: weekCounts,
+      },
+      equipmentUsage,
+      userWorkload,
+    }
+  }, [selectedMonth, batches])
 
   const qualityRateChartOption = useMemo(() => ({
     tooltip: { trigger: 'axis' },
@@ -190,18 +222,18 @@ function Reports() {
               valueStyle={{ color: currentMonthData.dailyStats.qualityRate >= 95 ? '#10B981' : '#F59E0B' }}
               prefix={<TrendingUpOutlined />}
             />
-            <p className="text-sm text-gray-500 mt-2">目标: 95%</p>
+            <p className="text-sm text-gray-500 mt-2">已完成 {currentMonthData.dailyStats.completedCount} 批次</p>
           </Card>
         </Col>
         <Col span={6}>
           <Card className="text-center">
             <Statistic 
               title="异常数量" 
-              value={currentMonthData.dailyStats.abnormal} 
-              valueStyle={{ color: currentMonthData.dailyStats.abnormal > 0 ? '#EF4444' : '#10B981' }}
+              value={currentMonthData.dailyStats.abnormalCount} 
+              valueStyle={{ color: currentMonthData.dailyStats.abnormalCount > 0 ? '#EF4444' : '#10B981' }}
               prefix={<AlertTriangleIcon />}
             />
-            <p className="text-sm text-gray-500 mt-2">{selectedMonth}异常</p>
+            <p className="text-sm text-gray-500 mt-2">处理中 {currentMonthData.dailyStats.processingCount} 批次</p>
           </Card>
         </Col>
         <Col span={6}>
