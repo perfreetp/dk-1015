@@ -9,7 +9,7 @@ import {
   UploadOutlined
 } from '@ant-design/icons'
 import { useStore } from '../store/useStore'
-import type { CleaningBatch } from '../data/mockData'
+import type { CleaningBatch, StepDetails } from '../data/mockData'
 
 interface User {
   id: number
@@ -44,15 +44,6 @@ const storageLocations = [
   { value: 'B-2', label: 'B区-2号柜' },
 ]
 
-interface StepData {
-  preprocess: { duration: number; completed: boolean; startTime?: string }
-  leakTest: { result: boolean; description: string; completed: boolean; operator?: string }
-  manualBrush: { completed: boolean; signature: string }
-  machineWash: { program: string; runTime: number; completed: boolean; startTime?: string }
-  disinfection: { concentration: number; time: number; temperature: number; completed: boolean; operator?: string }
-  dryStorage: { dryTime: number; location: string; completed: boolean; operator?: string }
-}
-
 function Cleaning({ user }: CleaningProps) {
   const { batches, endoscopes, addBatch, updateBatch, updateEndoscopeStatus } = useStore()
   const [currentStep, setCurrentStep] = useState(0)
@@ -63,14 +54,7 @@ function Cleaning({ user }: CleaningProps) {
   const [showNewBatchModal, setShowNewBatchModal] = useState(false)
   const [selectedEndoscopeId, setSelectedEndoscopeId] = useState<number | null>(null)
   const [form] = Form.useForm()
-  const [stepData, setStepData] = useState<StepData>({
-    preprocess: { duration: 0, completed: false },
-    leakTest: { result: true, description: '', completed: false },
-    manualBrush: { completed: false, signature: '' },
-    machineWash: { program: '', runTime: 0, completed: false },
-    disinfection: { concentration: 0, time: 0, temperature: 0, completed: false },
-    dryStorage: { dryTime: 0, location: '', completed: false },
-  })
+  const [stepDetails, setStepDetails] = useState<StepDetails>({})
 
   useEffect(() => {
     let interval: number
@@ -85,6 +69,7 @@ function Cleaning({ user }: CleaningProps) {
   useEffect(() => {
     if (selectedBatch) {
       setCurrentStep(selectedBatch.currentStep)
+      setStepDetails(selectedBatch.stepDetails || {})
     }
   }, [selectedBatch])
 
@@ -97,9 +82,9 @@ function Cleaning({ user }: CleaningProps) {
   const startTimer = () => {
     setIsRunning(true)
     if (currentStep === 0) {
-      setStepData(prev => ({ ...prev, preprocess: { ...prev.preprocess, startTime: new Date().toLocaleTimeString() } }))
+      setStepDetails(prev => ({ ...prev, preprocess: { duration: 0, startTime: new Date().toLocaleTimeString(), completed: false } }))
     } else if (currentStep === 3) {
-      setStepData(prev => ({ ...prev, machineWash: { ...prev.machineWash, startTime: new Date().toLocaleTimeString() } }))
+      setStepDetails(prev => ({ ...prev, machineWash: { program: '', runTime: 0, startTime: new Date().toLocaleTimeString(), completed: false } }))
     }
   }
 
@@ -136,19 +121,27 @@ function Cleaning({ user }: CleaningProps) {
 
     if (!selectedBatch) return
 
+    let newStepDetails: StepDetails = { ...stepDetails }
+
     if (currentStep === 0) {
-      setStepData(prev => ({ 
-        ...prev, 
-        preprocess: { duration: timer, completed: true, startTime: prev.preprocess.startTime } 
-      }))
+      newStepDetails.preprocess = { 
+        duration: timer, 
+        completed: true, 
+        startTime: stepDetails.preprocess?.startTime 
+      }
     } else if (currentStep === 1) {
       const values = form.getFieldsValue() as { leakResult: boolean; leakDesc: string }
-      setStepData(prev => ({ 
-        ...prev, 
-        leakTest: { result: values.leakResult, description: values.leakDesc, completed: true, operator: user.name } 
-      }))
+      newStepDetails.leakTest = { 
+        result: values.leakResult, 
+        description: values.leakDesc || '', 
+        completed: true, 
+        operator: user.name 
+      }
       if (!values.leakResult) {
-        updateBatch(selectedBatch.id, { status: 'abnormal' })
+        updateBatch(selectedBatch.id, { 
+          status: 'abnormal',
+          stepDetails: newStepDetails
+        })
         updateEndoscopeStatus(selectedBatch.endoscopeId, 'isolated')
         Modal.warning({
           title: '测漏未通过',
@@ -159,34 +152,36 @@ function Cleaning({ user }: CleaningProps) {
         setTimer(0)
         setIsRunning(false)
         form.resetFields()
+        setStepDetails({})
         return
       }
     } else if (currentStep === 2) {
-      setStepData(prev => ({ ...prev, manualBrush: { completed: true, signature: user.name } }))
+      newStepDetails.manualBrush = { completed: true, signature: user.name }
     } else if (currentStep === 3) {
       const values = form.getFieldsValue() as { program: string }
-      setStepData(prev => ({ 
-        ...prev, 
-        machineWash: { program: values.program, runTime: timer, completed: true, startTime: prev.machineWash.startTime } 
-      }))
+      newStepDetails.machineWash = { 
+        program: values.program, 
+        runTime: timer, 
+        completed: true, 
+        startTime: stepDetails.machineWash?.startTime 
+      }
     } else if (currentStep === 4) {
       const values = form.getFieldsValue() as { concentration: number; disinfectionTime: number; temperature: number }
-      setStepData(prev => ({ 
-        ...prev, 
-        disinfection: { 
-          concentration: values.concentration, 
-          time: values.disinfectionTime, 
-          temperature: values.temperature,
-          completed: true,
-          operator: user.name
-        } 
-      }))
+      newStepDetails.disinfection = { 
+        concentration: values.concentration, 
+        time: values.disinfectionTime, 
+        temperature: values.temperature,
+        completed: true,
+        operator: user.name
+      }
     } else if (currentStep === 5) {
       const values = form.getFieldsValue() as { dryTime: number; location: string }
-      setStepData(prev => ({ 
-        ...prev, 
-        dryStorage: { dryTime: values.dryTime, location: values.location, completed: true, operator: user.name } 
-      }))
+      newStepDetails.dryStorage = { 
+        dryTime: values.dryTime, 
+        location: values.location, 
+        completed: true, 
+        operator: user.name 
+      }
       
       updateBatch(selectedBatch.id, { 
         status: 'completed',
@@ -199,7 +194,8 @@ function Cleaning({ user }: CleaningProps) {
           machineWash: true,
           disinfection: true,
           dryStorage: true,
-        }
+        },
+        stepDetails: newStepDetails
       })
       updateEndoscopeStatus(selectedBatch.endoscopeId, 'available')
       
@@ -209,14 +205,7 @@ function Cleaning({ user }: CleaningProps) {
       setTimer(0)
       setIsRunning(false)
       form.resetFields()
-      setStepData({
-        preprocess: { duration: 0, completed: false },
-        leakTest: { result: true, description: '', completed: false },
-        manualBrush: { completed: false, signature: '' },
-        machineWash: { program: '', runTime: 0, completed: false },
-        disinfection: { concentration: 0, time: 0, temperature: 0, completed: false },
-        dryStorage: { dryTime: 0, location: '', completed: false },
-      })
+      setStepDetails({})
       return
     }
     
@@ -231,9 +220,11 @@ function Cleaning({ user }: CleaningProps) {
         ...(currentStep === 3 && { machineWash: true }),
         ...(currentStep === 4 && { disinfection: true }),
         ...(currentStep === 5 && { dryStorage: true }),
-      }
+      },
+      stepDetails: newStepDetails
     })
     
+    setStepDetails(newStepDetails)
     setCurrentStep(newStep)
     setTimer(0)
     setIsRunning(false)
@@ -274,6 +265,7 @@ function Cleaning({ user }: CleaningProps) {
         disinfection: false,
         dryStorage: false,
       },
+      stepDetails: {},
       startTime: now.toLocaleString('zh-CN'),
     })
 
@@ -285,14 +277,7 @@ function Cleaning({ user }: CleaningProps) {
     setCurrentStep(0)
     setTimer(0)
     setIsRunning(false)
-    setStepData({
-      preprocess: { duration: 0, completed: false },
-      leakTest: { result: true, description: '', completed: false },
-      manualBrush: { completed: false, signature: '' },
-      machineWash: { program: '', runTime: 0, completed: false },
-      disinfection: { concentration: 0, time: 0, temperature: 0, completed: false },
-      dryStorage: { dryTime: 0, location: '', completed: false },
-    })
+    setStepDetails({})
 
     message.success(`已创建洗消批次: ${batchNumber}`)
   }
@@ -368,11 +353,17 @@ function Cleaning({ user }: CleaningProps) {
                     )}
                     <Button type="primary" icon={<CheckCircleOutlined />} onClick={completeStep}>完成预处理</Button>
                   </div>
+                  {stepDetails.preprocess && stepDetails.preprocess.startTime && (
+                    <p className="text-sm text-gray-500 text-center mt-2">开始时间: {stepDetails.preprocess.startTime}</p>
+                  )}
                 </div>
               )}
 
               {currentStep === 1 && (
-                <Form form={form} layout="vertical">
+                <Form form={form} layout="vertical" initialValues={{
+                  leakResult: stepDetails.leakTest?.result,
+                  leakDesc: stepDetails.leakTest?.description
+                }}>
                   <Form.Item name="leakResult" label="测漏结果" rules={[{ required: true, message: '请选择测漏结果' }]}>
                     <Radio.Group>
                       <Radio value={true}>通过</Radio>
@@ -395,7 +386,11 @@ function Cleaning({ user }: CleaningProps) {
                   <div className="bg-gray-100 p-4 rounded-lg mb-4">
                     <p className="text-center">签名区域</p>
                     <div className="w-full h-24 border border-dashed border-gray-300 rounded mt-2 flex items-center justify-center">
-                      <span className="text-gray-400">点击或手写签名</span>
+                      {stepDetails.manualBrush?.signature ? (
+                        <span className="text-green-600">{stepDetails.manualBrush.signature}</span>
+                      ) : (
+                        <span className="text-gray-400">点击或手写签名</span>
+                      )}
                     </div>
                   </div>
                   <p className="text-sm text-gray-500">操作人员: {user.name}</p>
@@ -404,7 +399,9 @@ function Cleaning({ user }: CleaningProps) {
               )}
 
               {currentStep === 3 && (
-                <Form form={form} layout="vertical">
+                <Form form={form} layout="vertical" initialValues={{
+                  program: stepDetails.machineWash?.program
+                }}>
                   <Form.Item name="program" label="选择程序" rules={[{ required: true, message: '请选择机洗程序' }]}>
                     <Select options={programOptions} />
                   </Form.Item>
@@ -417,11 +414,18 @@ function Cleaning({ user }: CleaningProps) {
                     )}
                     <Button type="primary" icon={<CheckCircleOutlined />} onClick={completeStep}>完成机洗</Button>
                   </div>
+                  {stepDetails.machineWash && stepDetails.machineWash.startTime && (
+                    <p className="text-sm text-gray-500 text-center mt-2">开始时间: {stepDetails.machineWash.startTime}</p>
+                  )}
                 </Form>
               )}
 
               {currentStep === 4 && (
-                <Form form={form} layout="vertical">
+                <Form form={form} layout="vertical" initialValues={{
+                  concentration: stepDetails.disinfection?.concentration,
+                  disinfectionTime: stepDetails.disinfection?.time,
+                  temperature: stepDetails.disinfection?.temperature
+                }}>
                   <Form.Item name="concentration" label="消毒液浓度(%)" rules={[{ required: true, message: '请输入消毒液浓度' }]}>
                     <Input type="number" placeholder="请输入浓度" />
                   </Form.Item>
@@ -436,7 +440,10 @@ function Cleaning({ user }: CleaningProps) {
               )}
 
               {currentStep === 5 && (
-                <Form form={form} layout="vertical">
+                <Form form={form} layout="vertical" initialValues={{
+                  dryTime: stepDetails.dryStorage?.dryTime,
+                  location: stepDetails.dryStorage?.location
+                }}>
                   <Form.Item name="dryTime" label="干燥时间(分钟)" rules={[{ required: true, message: '请输入干燥时间' }]}>
                     <Input type="number" placeholder="请输入时间" />
                   </Form.Item>
@@ -526,22 +533,39 @@ function Cleaning({ user }: CleaningProps) {
               <h4 className="font-medium mb-2">流程记录</h4>
               <div className="space-y-2 text-sm">
                 <div className={selectedBatch.steps.preprocess ? 'text-green-600' : 'text-gray-400'}>
-                  {selectedBatch.steps.preprocess ? '✓' : '○'} 预处理: {stepData.preprocess.startTime || '-'}
+                  {selectedBatch.steps.preprocess ? '✓' : '○'} 预处理: 
+                  {selectedBatch.stepDetails?.preprocess?.startTime || '-'} - 
+                  {selectedBatch.stepDetails?.preprocess?.duration ? `${selectedBatch.stepDetails.preprocess.duration}秒` : '-'}
                 </div>
                 <div className={selectedBatch.steps.leakTest ? 'text-green-600' : 'text-gray-400'}>
-                  {selectedBatch.steps.leakTest ? '✓' : '○'} 测漏登记: {stepData.leakTest.result ? '通过' : '未通过'} - 操作者: {stepData.leakTest.operator || '-'}
+                  {selectedBatch.steps.leakTest ? '✓' : '○'} 测漏登记: 
+                  {selectedBatch.stepDetails?.leakTest?.result ? '通过' : '未通过'} - 
+                  操作者: {selectedBatch.stepDetails?.leakTest?.operator || '-'}
+                  {selectedBatch.stepDetails?.leakTest?.description && (
+                    <span className="ml-2">- {selectedBatch.stepDetails.leakTest.description}</span>
+                  )}
                 </div>
                 <div className={selectedBatch.steps.manualBrush ? 'text-green-600' : 'text-gray-400'}>
-                  {selectedBatch.steps.manualBrush ? '✓' : '○'} 手工刷洗: {stepData.manualBrush.signature || '-'}
+                  {selectedBatch.steps.manualBrush ? '✓' : '○'} 手工刷洗: 
+                  签名: {selectedBatch.stepDetails?.manualBrush?.signature || '-'}
                 </div>
                 <div className={selectedBatch.steps.machineWash ? 'text-green-600' : 'text-gray-400'}>
-                  {selectedBatch.steps.machineWash ? '✓' : '○'} 机洗程序: {stepData.machineWash.program || '-'} - {stepData.machineWash.runTime > 0 ? `${stepData.machineWash.runTime}秒` : '-'}
+                  {selectedBatch.steps.machineWash ? '✓' : '○'} 机洗程序: 
+                  {selectedBatch.stepDetails?.machineWash?.program || '-'} - 
+                  时长: {selectedBatch.stepDetails?.machineWash?.runTime ? `${selectedBatch.stepDetails.machineWash.runTime}秒` : '-'}
                 </div>
                 <div className={selectedBatch.steps.disinfection ? 'text-green-600' : 'text-gray-400'}>
-                  {selectedBatch.steps.disinfection ? '✓' : '○'} 消毒记录: 浓度{stepData.disinfection.concentration}% - 时间{stepData.disinfection.time}分钟 - 温度{stepData.disinfection.temperature}℃ - 操作者: {stepData.disinfection.operator || '-'}
+                  {selectedBatch.steps.disinfection ? '✓' : '○'} 消毒记录: 
+                  浓度{selectedBatch.stepDetails?.disinfection?.concentration || 0}% - 
+                  时间{selectedBatch.stepDetails?.disinfection?.time || 0}分钟 - 
+                  温度{selectedBatch.stepDetails?.disinfection?.temperature || 0}℃ - 
+                  操作者: {selectedBatch.stepDetails?.disinfection?.operator || '-'}
                 </div>
                 <div className={selectedBatch.steps.dryStorage ? 'text-green-600' : 'text-gray-400'}>
-                  {selectedBatch.steps.dryStorage ? '✓' : '○'} 干燥存放: {stepData.dryStorage.location || '-'} - 干燥{stepData.dryStorage.dryTime}分钟 - 操作者: {stepData.dryStorage.operator || '-'}
+                  {selectedBatch.steps.dryStorage ? '✓' : '○'} 干燥存放: 
+                  {selectedBatch.stepDetails?.dryStorage?.location || '-'} - 
+                  干燥{selectedBatch.stepDetails?.dryStorage?.dryTime || 0}分钟 - 
+                  操作者: {selectedBatch.stepDetails?.dryStorage?.operator || '-'}
                 </div>
               </div>
             </div>

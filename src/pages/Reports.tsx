@@ -49,7 +49,12 @@ const generateMonthlyData = (_month: string) => {
 }
 
 function Reports() {
-  const [selectedMonth, setSelectedMonth] = useState('2024-01')
+  const [selectedMonth, setSelectedMonth] = useState(() => {
+    const today = new Date()
+    const year = today.getFullYear()
+    const month = String(today.getMonth() + 1).padStart(2, '0')
+    return `${year}-${month}`
+  })
 
   const currentMonthData = useMemo(() => {
     return generateMonthlyData(selectedMonth)
@@ -118,7 +123,17 @@ function Reports() {
   }
 
   const handleMonthChange = (value: string) => {
-    setSelectedMonth(value)
+    if (value) {
+      setSelectedMonth(value)
+    }
+  }
+
+  const handleDatePickerChange = (date: Date | null) => {
+    if (date) {
+      const year = date.getFullYear()
+      const month = String(date.getMonth() + 1).padStart(2, '0')
+      setSelectedMonth(`${year}-${month}`)
+    }
   }
 
   const getMonthOptions = () => {
@@ -137,6 +152,7 @@ function Reports() {
   }
 
   const totalWorkload = currentMonthData.userWorkload.reduce((sum, u) => sum + u.count, 0)
+  const avgEquipmentUsage = Math.floor(currentMonthData.equipmentUsage.reduce((sum, e) => sum + e.rate, 0) / currentMonthData.equipmentUsage.length)
 
   return (
     <div className="space-y-6">
@@ -147,17 +163,13 @@ function Reports() {
             onChange={handleMonthChange}
             style={{ width: 200 }}
             options={getMonthOptions()}
+            placeholder="选择月份"
           />
           <DatePicker 
             picker="month" 
-            value={selectedMonth ? new Date(selectedMonth) : undefined}
-            onChange={(date) => {
-              if (date) {
-                const year = date.getFullYear()
-                const month = String(date.getMonth() + 1).padStart(2, '0')
-                setSelectedMonth(`${year}-${month}`)
-              }
-            }}
+            value={selectedMonth ? new Date(selectedMonth + '-01') : undefined}
+            onChange={handleDatePickerChange}
+            style={{ width: 200 }}
           />
         </div>
         <Button type="primary" icon={<DownloadOutlined />} onClick={handleExport}>
@@ -203,7 +215,7 @@ function Reports() {
           <Card className="text-center">
             <Statistic 
               title="设备利用率" 
-              value={Math.floor(currentMonthData.equipmentUsage.reduce((sum, e) => sum + e.rate, 0) / currentMonthData.equipmentUsage.length)} 
+              value={avgEquipmentUsage} 
               suffix="%"
               prefix={<ClockCircleOutlined className="text-secondary" />}
             />

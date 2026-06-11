@@ -37,6 +37,12 @@ const batchStatusConfig = {
   abnormal: { color: 'red', text: '异常' },
 }
 
+const programLabelMap: Record<string, string> = {
+  'standard': '标准清洗程序',
+  'enhanced': '强化清洗程序',
+  'quick': '快速清洗程序',
+}
+
 function Traceability({ user }: TraceabilityProps) {
   const { batches, patients, endoscopes } = useStore()
   const [searchParams, setSearchParams] = useState({
@@ -56,7 +62,14 @@ function Traceability({ user }: TraceabilityProps) {
     if (searchParams.dateRange && searchParams.dateRange.length === 2) {
       const [startDate, endDate] = searchParams.dateRange
       const batchDate = new Date(batch.startTime)
-      if (batchDate < startDate || batchDate > endDate) {
+      
+      const startOfDay = new Date(startDate)
+      startOfDay.setHours(0, 0, 0, 0)
+      
+      const endOfDay = new Date(endDate)
+      endOfDay.setHours(23, 59, 59, 999)
+      
+      if (batchDate < startOfDay || batchDate > endOfDay) {
         return false
       }
     }
@@ -91,8 +104,12 @@ function Traceability({ user }: TraceabilityProps) {
   ]
 
   const handleSearch = () => {
-    const values = form.getFieldsValue() as typeof searchParams
-    setSearchParams(values)
+    const values = form.getFieldsValue() as { batchNumber?: string; endoscopeSerial?: string; dateRange?: [Date, Date] }
+    setSearchParams({
+      batchNumber: values.batchNumber || '',
+      endoscopeSerial: values.endoscopeSerial || '',
+      dateRange: values.dateRange,
+    })
   }
 
   const viewDetail = (batch: CleaningBatch) => {
@@ -111,6 +128,8 @@ function Traceability({ user }: TraceabilityProps) {
     const patient = patients.find(p => p.id === selectedBatch.patientId)
     const endoscope = endoscopes.find(e => e.id === selectedBatch.endoscopeId)
     
+    const stepDetails = selectedBatch.stepDetails || {}
+
     const printContent = `
       <!DOCTYPE html>
       <html>
@@ -118,21 +137,25 @@ function Traceability({ user }: TraceabilityProps) {
         <meta charset="utf-8">
         <title>消化内镜洗消追溯单</title>
         <style>
-          body { font-family: 'SimSun', serif; padding: 20px; }
+          body { font-family: 'SimSun', serif; padding: 20px; font-size: 14px; }
           .header { text-align: center; margin-bottom: 30px; }
           .header h1 { font-size: 24px; margin-bottom: 10px; }
           .info-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-bottom: 30px; }
           .info-item { padding: 10px; border-bottom: 1px solid #eee; }
-          .info-label { color: #666; font-size: 14px; }
-          .info-value { font-weight: bold; font-size: 16px; }
+          .info-label { color: #666; font-size: 13px; }
+          .info-value { font-weight: bold; font-size: 15px; }
           .steps-section { margin-top: 30px; }
-          .steps-section h3 { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; }
-          .step-item { display: flex; justify-content: space-between; padding: 10px 0; border-bottom: 1px solid #eee; }
-          .step-name { flex: 1; }
+          .steps-section h3 { border-bottom: 2px solid #000; padding-bottom: 10px; margin-bottom: 20px; font-size: 16px; }
+          .step-item { padding: 12px 15px; border-bottom: 1px solid #eee; }
+          .step-header { display: flex; justify-content: space-between; margin-bottom: 8px; }
+          .step-name { font-weight: bold; }
           .step-status { font-weight: bold; }
+          .step-details { padding-left: 15px; font-size: 13px; color: #555; line-height: 1.6; }
           .footer { margin-top: 40px; text-align: right; border-top: 1px solid #eee; padding-top: 20px; }
-          .signature { margin-top: 30px; display: flex; justify-content: space-between; }
-          .signature-box { border-bottom: 1px solid #000; width: 200px; text-align: center; padding-bottom: 5px; }
+          .signature { margin-top: 30px; display: flex; justify-content: space-between; padding: 0 20px; }
+          .signature-box { border-bottom: 1px solid #000; width: 200px; text-align: center; padding-bottom: 5px; margin-bottom: 10px; }
+          .operator-info { font-size: 13px; color: #666; }
+          .print-time { margin-top: 20px; font-size: 12px; color: #888; }
         </style>
       </head>
       <body>
@@ -178,41 +201,99 @@ function Traceability({ user }: TraceabilityProps) {
         
         <div class="steps-section">
           <h3>洗消流程记录</h3>
+          
           <div class="step-item">
-            <span class="step-name">1. 预处理</span>
-            <span class="step-status" style="color: ${selectedBatch.steps.preprocess ? '#22c55e' : '#9ca3af'}">
-              ${selectedBatch.steps.preprocess ? '✓ 已完成' : '○ 未完成'}
-            </span>
+            <div class="step-header">
+              <span class="step-name">1. 预处理</span>
+              <span class="step-status" style="color: ${selectedBatch.steps.preprocess ? '#22c55e' : '#9ca3af'}">
+                ${selectedBatch.steps.preprocess ? '✓ 已完成' : '○ 未完成'}
+              </span>
+            </div>
+            ${stepDetails.preprocess ? `
+            <div class="step-details">
+              开始时间: ${stepDetails.preprocess.startTime || '-'}<br>
+              预处理时长: ${stepDetails.preprocess.duration}秒
+            </div>
+            ` : ''}
           </div>
+          
           <div class="step-item">
-            <span class="step-name">2. 测漏登记</span>
-            <span class="step-status" style="color: ${selectedBatch.steps.leakTest ? '#22c55e' : '#9ca3af'}">
-              ${selectedBatch.steps.leakTest ? '✓ 已完成' : '○ 未完成'}
-            </span>
+            <div class="step-header">
+              <span class="step-name">2. 测漏登记</span>
+              <span class="step-status" style="color: ${selectedBatch.steps.leakTest ? '#22c55e' : '#9ca3af'}">
+                ${selectedBatch.steps.leakTest ? '✓ 已完成' : '○ 未完成'}
+              </span>
+            </div>
+            ${stepDetails.leakTest ? `
+            <div class="step-details">
+              测漏结果: ${stepDetails.leakTest.result ? '通过' : '未通过'}<br>
+              操作者: ${stepDetails.leakTest.operator || '-'}
+              ${stepDetails.leakTest.description ? `<br>问题描述: ${stepDetails.leakTest.description}` : ''}
+            </div>
+            ` : ''}
           </div>
+          
           <div class="step-item">
-            <span class="step-name">3. 手工刷洗</span>
-            <span class="step-status" style="color: ${selectedBatch.steps.manualBrush ? '#22c55e' : '#9ca3af'}">
-              ${selectedBatch.steps.manualBrush ? '✓ 已完成' : '○ 未完成'}
-            </span>
+            <div class="step-header">
+              <span class="step-name">3. 手工刷洗</span>
+              <span class="step-status" style="color: ${selectedBatch.steps.manualBrush ? '#22c55e' : '#9ca3af'}">
+                ${selectedBatch.steps.manualBrush ? '✓ 已完成' : '○ 未完成'}
+              </span>
+            </div>
+            ${stepDetails.manualBrush ? `
+            <div class="step-details">
+              操作人员签名: ${stepDetails.manualBrush.signature || '-'}
+            </div>
+            ` : ''}
           </div>
+          
           <div class="step-item">
-            <span class="step-name">4. 机洗程序</span>
-            <span class="step-status" style="color: ${selectedBatch.steps.machineWash ? '#22c55e' : '#9ca3af'}">
-              ${selectedBatch.steps.machineWash ? '✓ 已完成' : '○ 未完成'}
-            </span>
+            <div class="step-header">
+              <span class="step-name">4. 机洗程序</span>
+              <span class="step-status" style="color: ${selectedBatch.steps.machineWash ? '#22c55e' : '#9ca3af'}">
+                ${selectedBatch.steps.machineWash ? '✓ 已完成' : '○ 未完成'}
+              </span>
+            </div>
+            ${stepDetails.machineWash ? `
+            <div class="step-details">
+              程序选择: ${programLabelMap[stepDetails.machineWash.program] || stepDetails.machineWash.program}<br>
+              运行时长: ${stepDetails.machineWash.runTime}秒<br>
+              开始时间: ${stepDetails.machineWash.startTime || '-'}
+            </div>
+            ` : ''}
           </div>
+          
           <div class="step-item">
-            <span class="step-name">5. 消毒记录</span>
-            <span class="step-status" style="color: ${selectedBatch.steps.disinfection ? '#22c55e' : '#9ca3af'}">
-              ${selectedBatch.steps.disinfection ? '✓ 已完成' : '○ 未完成'}
-            </span>
+            <div class="step-header">
+              <span class="step-name">5. 消毒记录</span>
+              <span class="step-status" style="color: ${selectedBatch.steps.disinfection ? '#22c55e' : '#9ca3af'}">
+                ${selectedBatch.steps.disinfection ? '✓ 已完成' : '○ 未完成'}
+              </span>
+            </div>
+            ${stepDetails.disinfection ? `
+            <div class="step-details">
+              消毒液浓度: ${stepDetails.disinfection.concentration}%<br>
+              消毒时间: ${stepDetails.disinfection.time}分钟<br>
+              消毒温度: ${stepDetails.disinfection.temperature}℃<br>
+              操作者: ${stepDetails.disinfection.operator || '-'}
+            </div>
+            ` : ''}
           </div>
+          
           <div class="step-item">
-            <span class="step-name">6. 干燥存放</span>
-            <span class="step-status" style="color: ${selectedBatch.steps.dryStorage ? '#22c55e' : '#9ca3af'}">
-              ${selectedBatch.steps.dryStorage ? '✓ 已完成' : '○ 未完成'}
-            </span>
+            <div class="step-header">
+              <span class="step-name">6. 干燥存放</span>
+              <span class="step-status" style="color: ${selectedBatch.steps.dryStorage ? '#22c55e' : '#9ca3af'}">
+                ${selectedBatch.steps.dryStorage ? '✓ 已完成' : '○ 未完成'}
+              </span>
+            </div>
+            ${stepDetails.dryStorage ? `
+            <div class="step-details">
+              干燥时间: ${stepDetails.dryStorage.dryTime}分钟<br>
+              存放位置: ${stepDetails.dryStorage.location || '-'}<br>
+              操作者: ${stepDetails.dryStorage.operator || '-'}
+            </div>
+            ` : ''}
           </div>
         </div>
         
@@ -220,14 +301,15 @@ function Traceability({ user }: TraceabilityProps) {
           <div class="signature">
             <div>
               <div class="signature-box">操作人员签名</div>
-              <div style="text-align: center; margin-top: 5px;">{user.name}</div>
+              <div class="operator-info">{user.name}</div>
             </div>
             <div>
               <div class="signature-box">质控人员签名</div>
-              <div style="text-align: center; margin-top: 5px;">________________</div>
+              <div class="operator-info">________________</div>
             </div>
           </div>
-          <p style="margin-top: 20px;">打印时间: {new Date().toLocaleString('zh-CN')}</p>
+          <div class="print-time">打印时间: ${new Date().toLocaleString('zh-CN')}</div>
+          <div class="print-time">打印人员: ${user.name}</div>
         </div>
       </body>
       </html>
@@ -325,32 +407,71 @@ function Traceability({ user }: TraceabilityProps) {
             <div className="border-t pt-4">
               <h4 className="font-medium mb-4">洗消流程进度</h4>
               <div className="space-y-3">
-                {steps.map((step, index) => (
-                  <div key={step.key} className="flex items-center gap-4">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold ${
-                      index < selectedBatch.currentStep 
-                        ? 'bg-green-500' 
-                        : index === selectedBatch.currentStep 
-                          ? 'bg-blue-500' 
-                          : 'bg-gray-300'
-                    }`}>
-                      {index < selectedBatch.currentStep ? '✓' : index + 1}
-                    </div>
-                    <div className="flex-1">
-                      <p className={`font-medium ${
-                        index < selectedBatch.currentStep ? 'text-green-600' : 'text-gray-700'
+                {steps.map((step, index) => {
+                  const details = selectedBatch.stepDetails?.[step.key as keyof typeof selectedBatch.stepDetails]
+                  const isCompleted = selectedBatch.steps[step.key as keyof typeof selectedBatch.steps]
+                  
+                  return (
+                    <div key={step.key} className="flex items-start gap-4">
+                      <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white font-bold flex-shrink-0 ${
+                        isCompleted ? 'bg-green-500' : index === selectedBatch.currentStep ? 'bg-blue-500' : 'bg-gray-300'
                       }`}>
-                        {step.title}
-                      </p>
-                      <p className="text-sm text-gray-500">
-                        {index < selectedBatch.currentStep ? '已完成' : index === selectedBatch.currentStep ? '进行中' : '待处理'}
-                      </p>
+                        {isCompleted ? '✓' : index + 1}
+                      </div>
+                      <div className="flex-1">
+                        <p className={`font-medium ${isCompleted ? 'text-green-600' : 'text-gray-700'}`}>
+                          {step.title}
+                        </p>
+                        <p className="text-sm text-gray-500">
+                          {isCompleted ? '已完成' : index === selectedBatch.currentStep ? '进行中' : '待处理'}
+                        </p>
+                        {isCompleted && details && (
+                          <div className="mt-2 p-3 bg-gray-50 rounded-lg text-sm">
+                            {step.key === 'preprocess' && (
+                              <>
+                                <p>开始时间: {(details as { startTime?: string }).startTime || '-'}</p>
+                                <p>预处理时长: {(details as { duration: number }).duration}秒</p>
+                              </>
+                            )}
+                            {step.key === 'leakTest' && (
+                              <>
+                                <p>测漏结果: {(details as { result: boolean }).result ? '通过' : '未通过'}</p>
+                                <p>操作者: {(details as { operator?: string }).operator || '-'}</p>
+                                {(details as { description: string }).description && (
+                                  <p>问题描述: {(details as { description: string }).description}</p>
+                                )}
+                              </>
+                            )}
+                            {step.key === 'manualBrush' && (
+                              <p>操作人员签名: {(details as { signature: string }).signature}</p>
+                            )}
+                            {step.key === 'machineWash' && (
+                              <>
+                                <p>程序选择: {programLabelMap[(details as { program: string }).program] || (details as { program: string }).program}</p>
+                                <p>运行时长: {(details as { runTime: number }).runTime}秒</p>
+                              </>
+                            )}
+                            {step.key === 'disinfection' && (
+                              <>
+                                <p>消毒液浓度: {(details as { concentration: number }).concentration}%</p>
+                                <p>消毒时间: {(details as { time: number }).time}分钟</p>
+                                <p>消毒温度: {(details as { temperature: number }).temperature}℃</p>
+                                <p>操作者: {(details as { operator?: string }).operator || '-'}</p>
+                              </>
+                            )}
+                            {step.key === 'dryStorage' && (
+                              <>
+                                <p>干燥时间: {(details as { dryTime: number }).dryTime}分钟</p>
+                                <p>存放位置: {(details as { location: string }).location}</p>
+                                <p>操作者: {(details as { operator?: string }).operator || '-'}</p>
+                              </>
+                            )}
+                          </div>
+                        )}
+                      </div>
                     </div>
-                    <div className={`h-1 flex-1 rounded-full ${
-                      index < selectedBatch.currentStep ? 'bg-green-500' : 'bg-gray-200'
-                    }`} />
-                  </div>
-                ))}
+                  )
+                })}
               </div>
             </div>
 
@@ -418,15 +539,65 @@ function Traceability({ user }: TraceabilityProps) {
             
             <div className="border-t pt-4">
               <h4 className="font-medium mb-4">洗消流程记录</h4>
-              <div className="space-y-2">
-                {steps.map((step, index) => (
-                  <div key={step.key} className="flex justify-between items-center py-2 border-b border-gray-100">
-                    <span>{index + 1}. {step.title}</span>
-                    <span className={selectedBatch!.steps[step.key as keyof typeof selectedBatch.steps] ? 'text-green-600 font-medium' : 'text-gray-400'}>
-                      {selectedBatch!.steps[step.key as keyof typeof selectedBatch.steps] ? '✓ 已完成' : '○ 未完成'}
-                    </span>
-                  </div>
-                ))}
+              <div className="space-y-3">
+                {steps.map((step, index) => {
+                  const details = selectedBatch.stepDetails?.[step.key as keyof typeof selectedBatch.stepDetails]
+                  const isCompleted = selectedBatch.steps[step.key as keyof typeof selectedBatch.steps]
+                  
+                  return (
+                    <div key={step.key} className="border-b border-gray-100 pb-3">
+                      <div className="flex justify-between items-center mb-2">
+                        <span className="font-medium">{index + 1}. {step.title}</span>
+                        <span className={isCompleted ? 'text-green-600 font-medium' : 'text-gray-400'}>
+                          {isCompleted ? '✓ 已完成' : '○ 未完成'}
+                        </span>
+                      </div>
+                      {isCompleted && details && (
+                        <div className="ml-4 text-sm text-gray-600 space-y-1">
+                          {step.key === 'preprocess' && (
+                            <>
+                              <p>开始时间: {(details as { startTime?: string }).startTime || '-'}</p>
+                              <p>预处理时长: {(details as { duration: number }).duration}秒</p>
+                            </>
+                          )}
+                          {step.key === 'leakTest' && (
+                            <>
+                              <p>测漏结果: {(details as { result: boolean }).result ? '通过' : '未通过'}</p>
+                              <p>操作者: {(details as { operator?: string }).operator || '-'}</p>
+                              {(details as { description: string }).description && (
+                                <p>问题描述: {(details as { description: string }).description}</p>
+                              )}
+                            </>
+                          )}
+                          {step.key === 'manualBrush' && (
+                            <p>操作人员签名: {(details as { signature: string }).signature}</p>
+                          )}
+                          {step.key === 'machineWash' && (
+                            <>
+                              <p>程序选择: {programLabelMap[(details as { program: string }).program] || (details as { program: string }).program}</p>
+                              <p>运行时长: {(details as { runTime: number }).runTime}秒</p>
+                            </>
+                          )}
+                          {step.key === 'disinfection' && (
+                            <>
+                              <p>消毒液浓度: {(details as { concentration: number }).concentration}%</p>
+                              <p>消毒时间: {(details as { time: number }).time}分钟</p>
+                              <p>消毒温度: {(details as { temperature: number }).temperature}℃</p>
+                              <p>操作者: {(details as { operator?: string }).operator || '-'}</p>
+                            </>
+                          )}
+                          {step.key === 'dryStorage' && (
+                            <>
+                              <p>干燥时间: {(details as { dryTime: number }).dryTime}分钟</p>
+                              <p>存放位置: {(details as { location: string }).location}</p>
+                              <p>操作者: {(details as { operator?: string }).operator || '-'}</p>
+                            </>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
               </div>
             </div>
             
@@ -442,6 +613,7 @@ function Traceability({ user }: TraceabilityProps) {
                 </div>
               </div>
               <p className="text-right text-sm text-gray-500 mt-4">打印时间: {new Date().toLocaleString('zh-CN')}</p>
+              <p className="text-right text-sm text-gray-500">打印人员: {user.name}</p>
             </div>
 
             <div className="flex justify-end gap-3">

@@ -21,6 +21,15 @@ export interface Patient {
   createdAt: string
 }
 
+export interface StepDetails {
+  preprocess?: { duration: number; startTime?: string; completed: boolean }
+  leakTest?: { result: boolean; description: string; completed: boolean; operator?: string }
+  manualBrush?: { completed: boolean; signature: string }
+  machineWash?: { program: string; runTime: number; completed: boolean; startTime?: string }
+  disinfection?: { concentration: number; time: number; temperature: number; completed: boolean; operator?: string }
+  dryStorage?: { dryTime: number; location: string; completed: boolean; operator?: string }
+}
+
 export interface CleaningBatch {
   id: number
   batchNumber: string
@@ -38,6 +47,7 @@ export interface CleaningBatch {
     disinfection: boolean
     dryStorage: boolean
   }
+  stepDetails?: StepDetails
   startTime: string
   endTime?: string
   createdAt: string
